@@ -51,6 +51,9 @@ function Index() {
             <span className="font-semibold tracking-tight">SignSpeak</span>
           </div>
           <nav className="flex items-center gap-4 text-sm">
+            <Link to="/train" className="text-muted-foreground hover:text-foreground">
+              Train
+            </Link>
             <Link to="/about" className="text-muted-foreground hover:text-foreground">
               About
             </Link>
@@ -76,10 +79,12 @@ function Index() {
 
         {demoMode && (
           <div className="mt-5 rounded-lg border border-border bg-card p-4 text-sm">
-            <strong>Demo mode active.</strong> No <code>public/model/model.json</code>{" "}
-            was found, so predictions are simulated from your hand motion. Train
-            and export a real model with the Python scripts in <code>python/</code>,
-            then drop the files into <code>public/model/</code>.
+            <strong>Demo mode active.</strong> No trained model found yet.{" "}
+            <Link to="/train" className="text-primary underline underline-offset-2">
+              Train your own gestures in the browser →
+            </Link>{" "}
+            (no Python, no Colab). Or drop an exported model into{" "}
+            <code>public/model/</code>.
           </div>
         )}
       </section>
