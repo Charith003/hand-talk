@@ -9,9 +9,12 @@ import {
 
 const SEQ_LENGTH = S_LEN;
 const FEATURE_LEN = F_LEN;
-const DEFAULT_CONF = 0.85;
+const DEFAULT_CONF = 0.8;
+const STABLE_WINDOW = 6;
+const STABLE_MIN_VOTES = 4;
 
 type Prediction = { word: string; confidence: number };
+type ModelSource = "indexeddb" | "public" | "demo";
 
 export interface HandTrackingOptions {
   confidenceThreshold?: number;
@@ -19,6 +22,44 @@ export interface HandTrackingOptions {
   onFrame?: (keypoints: number[], handCount: number) => void;
   enableInference?: boolean;
   modelVersion?: number;
+  autoStart?: boolean;
+}
+
+function emptyFeatures() {
+  return new Array(FEATURE_LEN).fill(0);
+}
+
+function normalizeHand(landmarks: any[] | undefined) {
+  if (!landmarks?.length) return new Array(63).fill(0);
+
+  const wrist = landmarks[0];
+  const middleBase = landmarks[9] ?? landmarks[0];
+  const palmScale = Math.max(
+    0.08,
+    Math.hypot(
+      (middleBase.x ?? 0) - (wrist.x ?? 0),
+      (middleBase.y ?? 0) - (wrist.y ?? 0),
+      (middleBase.z ?? 0) - (wrist.z ?? 0),
+    ),
+  );
+
+  return landmarks.flatMap((lm) => [
+    ((lm.x ?? 0) - (wrist.x ?? 0)) / palmScale,
+    ((lm.y ?? 0) - (wrist.y ?? 0)) / palmScale,
+    ((lm.z ?? 0) - (wrist.z ?? 0)) / palmScale,
+  ]);
+}
+
+function extractKeypoints(handsLandmarks: any[]) {
+  if (!handsLandmarks.length) return emptyFeatures();
+  const normalized = handsLandmarks.slice(0, 2).flatMap((hand) => normalizeHand(hand));
+  while (normalized.length < FEATURE_LEN) normalized.push(0);
+  return normalized.slice(0, FEATURE_LEN);
+}
+
+function getClassCount(model: tf.LayersModel) {
+  const output = model.outputs[0]?.shape;
+  return output?.[output.length - 1] ?? null;
 }
 
 export function useHandTracking(options: HandTrackingOptions = {}) {
@@ -28,6 +69,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     onFrame,
     enableInference = true,
     modelVersion = 0,
+    autoStart = false,
   } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -38,24 +80,34 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
   const cameraRef = useRef<any>(null);
   const handsRef = useRef<any>(null);
   const lastInferRef = useRef(0);
+  const predictionWindowRef = useRef<Prediction[]>([]);
   const onFrameRef = useRef(onFrame);
   onFrameRef.current = onFrame;
 
   const [prediction, setPrediction] = useState<Prediction>({ word: "", confidence: 0 });
   const [isReady, setIsReady] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
-  const [status, setStatus] = useState("Initializing...");
+  const [status, setStatus] = useState("Loading recognizer...");
   const [handVisible, setHandVisible] = useState(false);
-  const [modelSource, setModelSource] = useState<"indexeddb" | "public" | "demo">("demo");
+  const [modelSource, setModelSource] = useState<ModelSource>("demo");
+  const [cameraRequested, setCameraRequested] = useState(autoStart);
+  const [cameraStarted, setCameraStarted] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+
+  useEffect(() => {
+    if (autoStart) setCameraRequested(true);
+  }, [autoStart]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setIsReady(false);
+      setPrediction({ word: "", confidence: 0 });
+      predictionWindowRef.current = [];
+      sequenceRef.current = [];
       try { modelRef.current?.dispose?.(); } catch { /* noop */ }
       modelRef.current = null;
 
-      // 1) Prefer in-browser trained model in IndexedDB
       try {
         const list = await tf.io.listModels();
         if (list[MODEL_KEY]) {
@@ -63,6 +115,10 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
           if (stored.length > 0) {
             setStatus("Loading your trained model...");
             const model = await tf.loadLayersModel(MODEL_KEY);
+            if (getClassCount(model) !== stored.length) {
+              model.dispose();
+              throw new Error("Saved labels do not match the trained model");
+            }
             const dummy = tf.zeros([1, SEQ_LENGTH, FEATURE_LEN]);
             const warm = model.predict(dummy) as tf.Tensor;
             await warm.data();
@@ -73,41 +129,40 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
             labelsRef.current = stored;
             setDemoMode(false);
             setModelSource("indexeddb");
-            setStatus("Your trained model is live");
+            setStatus("Trained model ready");
             setIsReady(true);
             return;
           }
         }
       } catch { /* fall through */ }
 
-      // 2) Try /public/model
       try {
-        setStatus("Loading labels...");
+        setStatus("Looking for project model...");
         const lres = await fetch("/labels.json");
-        if (!lres.ok) throw new Error("no labels");
-        labelsRef.current = await lres.json();
-
-        setStatus("Loading TF.js model...");
+        if (!lres.ok) throw new Error("No labels file");
+        const labels = await lres.json();
         const model = await tf.loadLayersModel("/model/model.json");
+        if (getClassCount(model) !== labels.length) {
+          model.dispose();
+          throw new Error("Labels do not match model outputs");
+        }
         const dummy = tf.zeros([1, SEQ_LENGTH, FEATURE_LEN]);
         const warm = model.predict(dummy) as tf.Tensor;
         await warm.data();
         dummy.dispose();
         warm.dispose();
-        if (cancelled) return;
+        if (cancelled) { model.dispose(); return; }
         modelRef.current = model;
+        labelsRef.current = labels;
         setDemoMode(false);
         setModelSource("public");
-        setStatus("Model ready");
+        setStatus("Project model ready");
       } catch {
         if (cancelled) return;
-        labelsRef.current = [
-          "hello", "thank you", "yes", "no", "please",
-          "sorry", "help", "water", "food", "love",
-        ];
+        labelsRef.current = [];
         setDemoMode(true);
         setModelSource("demo");
-        setStatus("Demo mode — train your own gestures");
+        setStatus("Train a model to start recognition");
       } finally {
         if (!cancelled) setIsReady(true);
       }
@@ -115,19 +170,24 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     return () => { cancelled = true; };
   }, [modelVersion]);
 
+  const startCamera = useCallback(() => {
+    setCameraError("");
+    setCameraRequested(true);
+  }, []);
+
   const drawSkeleton = useCallback(
     (landmarksList: any[], ctx: CanvasRenderingContext2D, w: number, h: number) => {
-      const CONN = [
-        [0,1],[1,2],[2,3],[3,4],
-        [0,5],[5,6],[6,7],[7,8],
-        [0,9],[9,10],[10,11],[11,12],
-        [0,13],[13,14],[14,15],[15,16],
-        [0,17],[17,18],[18,19],[19,20],
+      const connections = [
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [5, 6], [6, 7], [7, 8],
+        [0, 9], [9, 10], [10, 11], [11, 12],
+        [0, 13], [13, 14], [14, 15], [15, 16],
+        [0, 17], [17, 18], [18, 19], [19, 20],
       ];
       for (const landmarks of landmarksList) {
-        ctx.strokeStyle = "rgba(140, 110, 255, 0.9)";
+        ctx.strokeStyle = "rgba(72, 190, 190, 0.95)";
         ctx.lineWidth = 3;
-        for (const [a, b] of CONN) {
+        for (const [a, b] of connections) {
           const pa = landmarks[a], pb = landmarks[b];
           ctx.beginPath();
           ctx.moveTo((1 - pa.x) * w, pa.y * h);
@@ -135,7 +195,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
           ctx.stroke();
         }
         for (const lm of landmarks) {
-          ctx.fillStyle = "rgb(80, 220, 170)";
+          ctx.fillStyle = "rgb(255, 196, 87)";
           ctx.beginPath();
           ctx.arc((1 - lm.x) * w, lm.y * h, 4.5, 0, Math.PI * 2);
           ctx.fill();
@@ -154,98 +214,110 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       const { width, height } = canvas;
       ctx.clearRect(0, 0, width, height);
 
-      let keypoints = new Array(FEATURE_LEN).fill(0);
       const handsLandmarks = results.multiHandLandmarks ?? [];
-      setHandVisible(handsLandmarks.length > 0);
+      const handCount = handsLandmarks.length;
+      setHandVisible(handCount > 0);
 
-      if (handsLandmarks.length > 0) {
-        drawSkeleton(handsLandmarks, ctx, width, height);
-        const h1 = handsLandmarks[0].flatMap((lm: any) => [lm.x, lm.y, lm.z]);
-        const h2 = handsLandmarks[1]
-          ? handsLandmarks[1].flatMap((lm: any) => [lm.x, lm.y, lm.z])
-          : new Array(63).fill(0);
-        keypoints = [...h1, ...h2].slice(0, FEATURE_LEN);
-      }
+      if (handCount > 0) drawSkeleton(handsLandmarks, ctx, width, height);
+      const keypoints = extractKeypoints(handsLandmarks);
 
       sequenceRef.current.push(keypoints);
       if (sequenceRef.current.length > SEQ_LENGTH) sequenceRef.current.shift();
-      onFrameRef.current?.(keypoints, handsLandmarks.length);
+      onFrameRef.current?.(keypoints, handCount);
 
-      if (!enableInference) return;
+      if (!enableInference || demoMode || !modelRef.current) return;
       if (sequenceRef.current.length < SEQ_LENGTH) return;
 
       const now = performance.now();
-      if (now - lastInferRef.current < 100) return;
+      if (now - lastInferRef.current < 110) return;
       lastInferRef.current = now;
 
-      if (modelRef.current && !demoMode) {
-        const input = tf.tensor3d([sequenceRef.current]);
-        const pred = modelRef.current.predict(input) as tf.Tensor;
-        const probs = (await pred.data()) as Float32Array;
-        input.dispose();
-        pred.dispose();
-        let maxIdx = 0;
-        for (let i = 1; i < probs.length; i++) if (probs[i] > probs[maxIdx]) maxIdx = i;
-        const conf = probs[maxIdx];
-        const word = labelsRef.current[maxIdx] ?? "";
-        const next = { word: conf > confidenceThreshold ? word : "", confidence: conf };
-        setPrediction(next);
-        if (next.word) onPrediction?.(next);
-      } else if (demoMode && handsLandmarks.length > 0) {
-        const sum = keypoints.reduce((a: number, b: number) => a + Math.abs(b), 0);
-        const idx = Math.floor(sum * 7) % labelsRef.current.length;
-        const conf = 0.88 + (Math.sin(now / 800) + 1) * 0.05;
-        const word = labelsRef.current[idx];
-        const next = { word, confidence: Math.min(0.99, conf) };
-        setPrediction(next);
-        onPrediction?.(next);
+      const input = tf.tensor3d([sequenceRef.current]);
+      const pred = modelRef.current.predict(input) as tf.Tensor;
+      const probs = (await pred.data()) as Float32Array;
+      input.dispose();
+      pred.dispose();
+
+      let maxIdx = 0;
+      for (let i = 1; i < probs.length; i++) if (probs[i] > probs[maxIdx]) maxIdx = i;
+      const conf = probs[maxIdx] ?? 0;
+      const word = conf >= confidenceThreshold ? labelsRef.current[maxIdx] ?? "" : "";
+
+      predictionWindowRef.current.push({ word, confidence: conf });
+      if (predictionWindowRef.current.length > STABLE_WINDOW) predictionWindowRef.current.shift();
+
+      const votes = new Map<string, { count: number; total: number }>();
+      for (const item of predictionWindowRef.current) {
+        if (!item.word) continue;
+        const existing = votes.get(item.word) ?? { count: 0, total: 0 };
+        votes.set(item.word, { count: existing.count + 1, total: existing.total + item.confidence });
       }
+
+      let stable: Prediction = { word: "", confidence: conf };
+      votes.forEach((value, key) => {
+        if (value.count >= STABLE_MIN_VOTES && value.count > (votes.get(stable.word)?.count ?? 0)) {
+          stable = { word: key, confidence: value.total / value.count };
+        }
+      });
+
+      setPrediction(stable);
+      if (stable.word) onPrediction?.(stable);
     },
     [drawSkeleton, demoMode, confidenceThreshold, onPrediction, enableInference],
   );
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !cameraRequested) return;
     let stopped = false;
     (async () => {
-      const { Hands } = await import("@mediapipe/hands");
-      const { Camera } = await import("@mediapipe/camera_utils");
-      if (stopped) return;
-      const hands = new Hands({
-        locateFile: (f: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
-      });
-      hands.setOptions({
-        maxNumHands: 2,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.5,
-      });
-      hands.onResults(onResults);
-      handsRef.current = hands;
-
-      if (videoRef.current) {
-        const camera = new Camera(videoRef.current, {
-          onFrame: async () => {
-            if (videoRef.current) await hands.send({ image: videoRef.current });
-          },
-          width: 640,
-          height: 480,
+      try {
+        setStatus("Starting camera...");
+        setCameraError("");
+        const { Hands } = await import("@mediapipe/hands");
+        const { Camera } = await import("@mediapipe/camera_utils");
+        if (stopped) return;
+        const hands = new Hands({
+          locateFile: (f: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
         });
-        cameraRef.current = camera;
-        try {
+        hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.65,
+          minTrackingConfidence: 0.55,
+        });
+        hands.onResults(onResults);
+        handsRef.current = hands;
+
+        if (videoRef.current) {
+          const camera = new Camera(videoRef.current, {
+            onFrame: async () => {
+              if (videoRef.current) await hands.send({ image: videoRef.current });
+            },
+            width: 640,
+            height: 480,
+          });
+          cameraRef.current = camera;
           await camera.start();
-        } catch {
-          setStatus("Camera permission denied");
+          if (stopped) return;
+          setCameraStarted(true);
+          setStatus(demoMode ? "Camera ready — train a model" : "Camera ready");
         }
+      } catch {
+        if (stopped) return;
+        setCameraStarted(false);
+        setCameraRequested(false);
+        setCameraError("Camera access was blocked. Allow camera permission, then try again.");
+        setStatus("Camera blocked");
       }
     })();
 
     return () => {
       stopped = true;
+      setCameraStarted(false);
       try { cameraRef.current?.stop?.(); } catch { /* noop */ }
       try { handsRef.current?.close?.(); } catch { /* noop */ }
     };
-  }, [isReady, onResults]);
+  }, [isReady, cameraRequested, onResults, demoMode]);
 
   return {
     videoRef,
@@ -257,5 +329,8 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     handVisible,
     vocabulary: labelsRef.current,
     modelSource,
+    cameraStarted,
+    cameraError,
+    startCamera,
   };
 }

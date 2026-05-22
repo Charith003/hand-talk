@@ -14,24 +14,56 @@ export function useSentenceBuilder(opts: {
   const { pauseMs = PAUSE_TIMEOUT_MS, ttsEnabled = true } = opts;
   const [words, setWords] = useState<string[]>([]);
   const [history, setHistory] = useState<SentenceEntry[]>([]);
+  const [ttsReady, setTtsReady] = useState(false);
   const lastWordRef = useRef<string>("");
-  const lastAddRef = useRef<number>(0);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const unlockTts = useCallback(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+    const synth = window.speechSynthesis;
+    try {
+      synth.resume();
+      synth.getVoices();
+      setTtsReady(true);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const speak = useCallback((text: string) => {
     if (!text || typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 0.95;
-    utt.pitch = 1;
-    window.speechSynthesis.speak(utt);
-  }, []);
+    if (!unlockTts()) return;
+
+    const synth = window.speechSynthesis;
+    let spoken = false;
+    const run = () => {
+      if (spoken) return;
+      spoken = true;
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = synth.getVoices();
+      const englishVoice = voices.find((voice) => voice.lang?.toLowerCase().startsWith("en"));
+      if (englishVoice) utterance.voice = englishVoice;
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      synth.speak(utterance);
+    };
+
+    if (synth.getVoices().length === 0) {
+      synth.onvoiceschanged = run;
+      window.setTimeout(run, 200);
+    } else {
+      run();
+    }
+  }, [unlockTts]);
 
   const finalizeSentence = useCallback(() => {
     setWords((prev) => {
       if (prev.length === 0) return prev;
       const text = prev.join(" ");
-      if (ttsEnabled) speak(text);
+      if (ttsEnabled && ttsReady) speak(text);
       setHistory((h) => [
         { text, time: new Date().toLocaleTimeString() },
         ...h,
@@ -39,24 +71,17 @@ export function useSentenceBuilder(opts: {
       lastWordRef.current = "";
       return [];
     });
-  }, [speak, ttsEnabled]);
+  }, [speak, ttsEnabled, ttsReady]);
 
   const addPrediction = useCallback(
     (word: string, _confidence: number) => {
       if (!word) return;
-      const now = performance.now();
-      // Debounce: skip same word repeated within 700ms
-      if (word === lastWordRef.current && now - lastAddRef.current < 700) {
-        // still keep timer alive
-        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-        pauseTimerRef.current = setTimeout(finalizeSentence, pauseMs);
-        return;
-      }
-      lastWordRef.current = word;
-      lastAddRef.current = now;
-      setWords((prev) => [...prev, word].slice(-30));
       if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
       pauseTimerRef.current = setTimeout(finalizeSentence, pauseMs);
+
+      if (word === lastWordRef.current) return;
+      lastWordRef.current = word;
+      setWords((prev) => [...prev, word].slice(-30));
     },
     [finalizeSentence, pauseMs],
   );
@@ -68,6 +93,7 @@ export function useSentenceBuilder(opts: {
   }, []);
 
   const speakNow = useCallback(() => {
+    unlockTts();
     const text = words.join(" ");
     if (text) {
       speak(text);
@@ -76,11 +102,16 @@ export function useSentenceBuilder(opts: {
         ...h,
       ].slice(0, 20));
     }
-  }, [words, speak]);
+  }, [words, speak, unlockTts]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.getVoices();
+  }, []);
 
   useEffect(() => () => {
     if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
   }, []);
 
-  return { words, history, addPrediction, clear, speakNow, speak };
+  return { words, history, addPrediction, clear, speakNow, speak, unlockTts, ttsReady };
 }
