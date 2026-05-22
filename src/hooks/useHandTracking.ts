@@ -194,14 +194,14 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         for (const [a, b] of connections) {
           const pa = landmarks[a], pb = landmarks[b];
           ctx.beginPath();
-          ctx.moveTo((1 - pa.x) * w, pa.y * h);
-          ctx.lineTo((1 - pb.x) * w, pb.y * h);
+          ctx.moveTo((1 - (pa.x ?? 0)) * w, (pa.y ?? 0) * h);
+          ctx.lineTo((1 - (pb.x ?? 0)) * w, (pb.y ?? 0) * h);
           ctx.stroke();
         }
         for (const lm of landmarks) {
           ctx.fillStyle = "rgb(255, 196, 87)";
           ctx.beginPath();
-          ctx.arc((1 - lm.x) * w, lm.y * h, 4.5, 0, Math.PI * 2);
+          ctx.arc((1 - (lm.x ?? 0)) * w, (lm.y ?? 0) * h, 4.5, 0, Math.PI * 2);
           ctx.fill();
         }
       }
