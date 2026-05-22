@@ -133,7 +133,8 @@ function Index() {
                     </div>
                     <h2 className="mt-5 text-2xl font-semibold">Start the camera first</h2>
                     <p className="mt-2 text-sm text-stage-foreground/70">
-                      Browser camera access must be started by a click. This prevents the blocked-camera error you were seeing.
+                      Browser camera access must be started by a click. This prevents the
+                      blocked-camera error you were seeing.
                     </p>
                     {cameraError && (
                       <p className="mt-3 rounded-xl border border-stage-foreground/10 bg-stage-foreground/10 p-3 text-sm">
@@ -236,7 +237,8 @@ function Index() {
 
               {!sentenceBuilder.ttsReady && (
                 <p className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
-                  Tap Enable voice once before using Auto-TTS. Browsers block speech until the user interacts.
+                  Tap Enable voice once before using Auto-TTS. Browsers block speech until the user
+                  interacts.
                 </p>
               )}
             </section>
@@ -255,7 +257,11 @@ function Index() {
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Model</span>
                   <span className="font-medium">
-                    {demoMode ? "Needs training" : modelSource === "indexeddb" ? "Browser trained" : "Project file"}
+                    {demoMode
+                      ? "Needs training"
+                      : modelSource === "indexeddb"
+                        ? "Browser trained"
+                        : "Project file"}
                   </span>
                 </div>
               </div>

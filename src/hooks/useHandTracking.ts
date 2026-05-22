@@ -109,7 +109,11 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       setPrediction({ word: "", confidence: 0 });
       predictionWindowRef.current = [];
       sequenceRef.current = [];
-      try { modelRef.current?.dispose?.(); } catch { /* noop */ }
+      try {
+        modelRef.current?.dispose?.();
+      } catch {
+        /* noop */
+      }
       modelRef.current = null;
 
       try {
@@ -128,7 +132,10 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
             await warm.data();
             dummy.dispose();
             warm.dispose();
-            if (cancelled) { model.dispose(); return; }
+            if (cancelled) {
+              model.dispose();
+              return;
+            }
             modelRef.current = model;
             labelsRef.current = stored;
             setDemoMode(false);
@@ -138,7 +145,9 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
             return;
           }
         }
-      } catch { /* fall through */ }
+      } catch {
+        /* fall through */
+      }
 
       try {
         setStatus("Looking for project model...");
@@ -155,7 +164,10 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         await warm.data();
         dummy.dispose();
         warm.dispose();
-        if (cancelled) { model.dispose(); return; }
+        if (cancelled) {
+          model.dispose();
+          return;
+        }
         modelRef.current = model;
         labelsRef.current = labels;
         setDemoMode(false);
@@ -171,7 +183,9 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         if (!cancelled) setIsReady(true);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [modelVersion]);
 
   const startCamera = useCallback(() => {
@@ -182,17 +196,33 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
   const drawSkeleton = useCallback(
     (landmarksList: Landmark[][], ctx: CanvasRenderingContext2D, w: number, h: number) => {
       const connections = [
-        [0, 1], [1, 2], [2, 3], [3, 4],
-        [0, 5], [5, 6], [6, 7], [7, 8],
-        [0, 9], [9, 10], [10, 11], [11, 12],
-        [0, 13], [13, 14], [14, 15], [15, 16],
-        [0, 17], [17, 18], [18, 19], [19, 20],
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [0, 5],
+        [5, 6],
+        [6, 7],
+        [7, 8],
+        [0, 9],
+        [9, 10],
+        [10, 11],
+        [11, 12],
+        [0, 13],
+        [13, 14],
+        [14, 15],
+        [15, 16],
+        [0, 17],
+        [17, 18],
+        [18, 19],
+        [19, 20],
       ];
       for (const landmarks of landmarksList) {
         ctx.strokeStyle = "rgba(72, 190, 190, 0.95)";
         ctx.lineWidth = 3;
         for (const [a, b] of connections) {
-          const pa = landmarks[a], pb = landmarks[b];
+          const pa = landmarks[a],
+            pb = landmarks[b];
           ctx.beginPath();
           ctx.moveTo((1 - (pa.x ?? 0)) * w, (pa.y ?? 0) * h);
           ctx.lineTo((1 - (pb.x ?? 0)) * w, (pb.y ?? 0) * h);
@@ -245,7 +275,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       let maxIdx = 0;
       for (let i = 1; i < probs.length; i++) if (probs[i] > probs[maxIdx]) maxIdx = i;
       const conf = probs[maxIdx] ?? 0;
-      const word = conf >= confidenceThreshold ? labelsRef.current[maxIdx] ?? "" : "";
+      const word = conf >= confidenceThreshold ? (labelsRef.current[maxIdx] ?? "") : "";
 
       predictionWindowRef.current.push({ word, confidence: conf });
       if (predictionWindowRef.current.length > STABLE_WINDOW) predictionWindowRef.current.shift();
@@ -254,7 +284,10 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       for (const item of predictionWindowRef.current) {
         if (!item.word) continue;
         const existing = votes.get(item.word) ?? { count: 0, total: 0 };
-        votes.set(item.word, { count: existing.count + 1, total: existing.total + item.confidence });
+        votes.set(item.word, {
+          count: existing.count + 1,
+          total: existing.total + item.confidence,
+        });
       }
 
       let stable: Prediction = { word: "", confidence: conf };
@@ -318,8 +351,16 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     return () => {
       stopped = true;
       setCameraStarted(false);
-      try { cameraRef.current?.stop?.(); } catch { /* noop */ }
-      try { handsRef.current?.close?.(); } catch { /* noop */ }
+      try {
+        cameraRef.current?.stop?.();
+      } catch {
+        /* noop */
+      }
+      try {
+        handsRef.current?.close?.();
+      } catch {
+        /* noop */
+      }
     };
   }, [isReady, cameraRequested, onResults, demoMode]);
 

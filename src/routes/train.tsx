@@ -36,8 +36,12 @@ function TrainPage() {
   const [recordedFrames, setRecordedFrames] = useState(0);
   const [countdown, setCountdown] = useState(0);
   const [training, setTraining] = useState(false);
-  const [trainLog, setTrainLog] = useState<{ epoch: number; loss: number; acc: number } | null>(null);
-  const [trainHistory, setTrainHistory] = useState<{ epoch: number; loss: number; acc: number }[]>([]);
+  const [trainLog, setTrainLog] = useState<{ epoch: number; loss: number; acc: number } | null>(
+    null,
+  );
+  const [trainHistory, setTrainHistory] = useState<{ epoch: number; loss: number; acc: number }[]>(
+    [],
+  );
   const [modelVersion, setModelVersion] = useState(0);
   const [message, setMessage] = useState<string>("");
 
@@ -45,10 +49,18 @@ function TrainPage() {
   const recordingRef = useRef(false);
   const activeLabelRef = useRef(activeLabel);
 
-  useEffect(() => { recordingRef.current = recording; }, [recording]);
-  useEffect(() => { activeLabelRef.current = activeLabel; }, [activeLabel]);
-  useEffect(() => { saveLabels(labels); }, [labels]);
-  useEffect(() => { saveSamples(samples); }, [samples]);
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
+  useEffect(() => {
+    activeLabelRef.current = activeLabel;
+  }, [activeLabel]);
+  useEffect(() => {
+    saveLabels(labels);
+  }, [labels]);
+  useEffect(() => {
+    saveSamples(samples);
+  }, [samples]);
 
   const onFrame = useCallback((keypoints: number[], handCount: number) => {
     if (!recordingRef.current || handCount === 0) return;
@@ -175,10 +187,16 @@ function TrainPage() {
             </span>
           </Link>
           <nav className="flex items-center gap-2 text-sm">
-            <Link to="/" className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground">
+            <Link
+              to="/"
+              className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            >
               Live
             </Link>
-            <Link to="/about" className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground">
+            <Link
+              to="/about"
+              className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            >
               About
             </Link>
           </nav>
@@ -190,7 +208,8 @@ function TrainPage() {
           <div>
             <h1 className="text-3xl font-semibold sm:text-4xl">Train accurate custom gestures</h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Add gestures, record clear samples, then train locally. For better accuracy, use the same lighting and camera position during training and live recognition.
+              Add gestures, record clear samples, then train locally. For better accuracy, use the
+              same lighting and camera position during training and live recognition.
             </p>
           </div>
           <Link
@@ -209,13 +228,28 @@ function TrainPage() {
                 <p className="text-sm text-stage-foreground/70">{status}</p>
               </div>
               <div className="rounded-full border border-stage-foreground/10 bg-stage-foreground/10 px-3 py-1.5 text-xs">
-                {recording ? `Recording ${recordedFrames}/${SEQ_LENGTH}` : handVisible ? "Hand detected" : "Show hand"}
+                {recording
+                  ? `Recording ${recordedFrames}/${SEQ_LENGTH}`
+                  : handVisible
+                    ? "Hand detected"
+                    : "Show hand"}
               </div>
             </div>
 
             <div className="relative aspect-[4/3] bg-stage sm:aspect-video lg:aspect-[4/3]">
-              <video ref={videoRef} className="absolute inset-0 h-full w-full -scale-x-100 object-cover" autoPlay muted playsInline />
-              <canvas ref={canvasRef} width={640} height={480} className="absolute inset-0 h-full w-full" />
+              <video
+                ref={videoRef}
+                className="absolute inset-0 h-full w-full -scale-x-100 object-cover"
+                autoPlay
+                muted
+                playsInline
+              />
+              <canvas
+                ref={canvasRef}
+                width={640}
+                height={480}
+                className="absolute inset-0 h-full w-full"
+              />
 
               {!cameraStarted && (
                 <div className="absolute inset-0 flex items-center justify-center bg-stage/85 px-6 text-center backdrop-blur-sm">
@@ -225,9 +259,14 @@ function TrainPage() {
                     </div>
                     <h3 className="mt-5 text-2xl font-semibold">Start camera to record</h3>
                     <p className="mt-2 text-sm text-stage-foreground/70">
-                      The camera now starts only from this button, so browser permission works reliably.
+                      The camera now starts only from this button, so browser permission works
+                      reliably.
                     </p>
-                    {cameraError && <p className="mt-3 rounded-xl bg-stage-foreground/10 p-3 text-sm">{cameraError}</p>}
+                    {cameraError && (
+                      <p className="mt-3 rounded-xl bg-stage-foreground/10 p-3 text-sm">
+                        {cameraError}
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={startCamera}
@@ -242,7 +281,9 @@ function TrainPage() {
 
               {countdown > 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-stage/40">
-                  <div className="text-8xl font-bold text-stage-foreground drop-shadow-lg">{countdown}</div>
+                  <div className="text-8xl font-bold text-stage-foreground drop-shadow-lg">
+                    {countdown}
+                  </div>
                 </div>
               )}
 
@@ -267,7 +308,9 @@ function TrainPage() {
                 <input
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") addLabel(); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addLabel();
+                  }}
                   placeholder="e.g. hello"
                   className="min-w-0 flex-1 rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none transition focus:ring-2 focus:ring-ring"
                 />
@@ -288,9 +331,15 @@ function TrainPage() {
                       activeLabel === label ? "border-primary bg-primary/10" : "border-border"
                     }`}
                   >
-                    <button type="button" onClick={() => setActiveLabel(label)} className="min-w-0 flex-1 px-2 py-1 text-left">
+                    <button
+                      type="button"
+                      onClick={() => setActiveLabel(label)}
+                      className="min-w-0 flex-1 px-2 py-1 text-left"
+                    >
                       <span className="block truncate font-medium">{label}</span>
-                      <span className="text-xs text-muted-foreground">{count} / 5 minimum samples</span>
+                      <span className="text-xs text-muted-foreground">
+                        {count} / 5 minimum samples
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -313,7 +362,8 @@ function TrainPage() {
             <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
               <p className="text-xs uppercase text-muted-foreground">2 · Record sample</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Selected: <span className="font-medium text-foreground">{activeLabel || "none"}</span>
+                Selected:{" "}
+                <span className="font-medium text-foreground">{activeLabel || "none"}</span>
               </p>
               <button
                 type="button"
@@ -324,7 +374,8 @@ function TrainPage() {
                 {recording ? "Recording…" : countdown > 0 ? "Get ready…" : "Record 30-frame sample"}
               </button>
               <p className="mt-3 text-xs text-muted-foreground">
-                Record 8–15 samples per gesture for best accuracy. Keep every gesture visually different.
+                Record 8–15 samples per gesture for best accuracy. Keep every gesture visually
+                different.
               </p>
             </section>
 
@@ -345,16 +396,27 @@ function TrainPage() {
               )}
               {trainLog && (
                 <div className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
-                  <p>Epoch <span className="font-mono">{trainLog.epoch}</span></p>
-                  <p>Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span></p>
-                  <p>Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span></p>
+                  <p>
+                    Epoch <span className="font-mono">{trainLog.epoch}</span>
+                  </p>
+                  <p>
+                    Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span>
+                  </p>
+                  <p>
+                    Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span>
+                  </p>
                 </div>
               )}
               {message && (
-                <p className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">{message}</p>
+                <p className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
+                  {message}
+                </p>
               )}
               {message.includes("trained") && (
-                <Link to="/" className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold transition hover:bg-accent">
+                <Link
+                  to="/"
+                  className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold transition hover:bg-accent"
+                >
                   <CheckCircle2 className="h-4 w-4" />
                   Open live recognizer
                 </Link>

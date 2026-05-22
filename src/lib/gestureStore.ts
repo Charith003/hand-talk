@@ -76,9 +76,7 @@ export function buildModel(numClasses: number): tf.LayersModel {
   model.add(tf.layers.dropout({ rate: 0.25 }));
   model.add(tf.layers.dense({ units: 64, activation: "relu" }));
   model.add(tf.layers.dense({ units: 32, activation: "relu" }));
-  model.add(
-    tf.layers.dense({ units: numClasses, activation: "softmax" }),
-  );
+  model.add(tf.layers.dense({ units: numClasses, activation: "softmax" }));
   model.compile({
     optimizer: tf.train.adam(8e-4),
     loss: "categoricalCrossentropy",
