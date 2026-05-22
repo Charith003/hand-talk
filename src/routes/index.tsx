@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Mic, Mic2, Play, RotateCcw, Sparkles, Volume2 } from "lucide-react";
 import { useCallback, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { useSentenceBuilder } from "@/hooks/useSentenceBuilder";
 
@@ -8,11 +8,11 @@ export const Route = createFileRoute("/")({
   component: Index,
   head: () => ({
     meta: [
-      { title: "SignSpeak — Real-time Sign Language Translator" },
+      { title: "SignSpeak — Live Sign Translator" },
       {
         name: "description",
         content:
-          "Browser-based sign language to speech translator using MediaPipe hand tracking and an LSTM model running on TensorFlow.js.",
+          "Train gestures in the browser, recognize signs from your webcam, build sentences, and speak them with browser text-to-speech.",
       },
     ],
   }),
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const sentenceBuilder = useSentenceBuilder({ ttsEnabled });
-  const { addPrediction } = sentenceBuilder;
+  const { addPrediction, unlockTts } = sentenceBuilder;
 
   const onPrediction = useCallback(
     (p: { word: string; confidence: number }) => addPrediction(p.word, p.confidence),
@@ -36,199 +36,254 @@ function Index() {
     demoMode,
     status,
     handVisible,
-    vocabulary,
+    modelSource,
+    cameraStarted,
+    cameraError,
+    startCamera,
   } = useHandTracking({ onPrediction });
+
+  const enableVoice = () => {
+    unlockTts();
+    setTtsEnabled(true);
+  };
+
+  const speakCurrent = () => {
+    unlockTts();
+    sentenceBuilder.speakNow();
+  };
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border/60">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2">
-            <div
-              className="h-8 w-8 rounded-lg"
-              style={{ background: "var(--gradient-primary)" }}
-            />
-            <span className="font-semibold tracking-tight">SignSpeak</span>
-          </div>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link to="/train" className="text-muted-foreground hover:text-foreground">
+      <header className="border-b border-border bg-card/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+          <Link to="/" className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <Mic2 className="h-5 w-5" />
+            </span>
+            <span>
+              <span className="block text-base font-semibold">SignSpeak</span>
+              <span className="block text-xs text-muted-foreground">train · sign · speak</span>
+            </span>
+          </Link>
+          <nav className="flex items-center gap-2 text-sm">
+            <Link
+              to="/train"
+              className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition hover:opacity-90"
+            >
               Train
             </Link>
-            <Link to="/about" className="text-muted-foreground hover:text-foreground">
+            <Link
+              to="/about"
+              className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            >
               About
             </Link>
-            <a
-              href="https://github.com"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Docs
-            </a>
           </nav>
         </div>
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 pt-10 pb-6">
-        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-          Sign language → spoken English, live in your browser.
-        </h1>
-        <p className="mt-3 max-w-2xl text-muted-foreground">
-          MediaPipe extracts 21 hand landmarks per frame. A 30-frame sliding
-          buffer feeds an LSTM that recognizes signs, then a pause-detection
-          sentence builder triggers the Web Speech API.
-        </p>
-
-        {demoMode && (
-          <div className="mt-5 rounded-lg border border-border bg-card p-4 text-sm">
-            <strong>Demo mode active.</strong> No trained model found yet.{" "}
-            <Link to="/train" className="text-primary underline underline-offset-2">
-              Train your own gestures in the browser →
-            </Link>{" "}
-            (no Python, no Colab). Or drop an exported model into{" "}
-            <code>public/model/</code>.
-          </div>
-        )}
-      </section>
-
-      <section className="mx-auto grid max-w-6xl gap-6 px-6 pb-10 lg:grid-cols-[1fr_360px]">
-        {/* Webcam stage */}
-        <div
-          className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-border bg-black"
-          style={{ boxShadow: "var(--shadow-elegant)" }}
-        >
-          <video
-            ref={videoRef}
-            className="absolute inset-0 h-full w-full -scale-x-100 object-cover"
-            autoPlay
-            muted
-            playsInline
-          />
-          <canvas
-            ref={canvasRef}
-            width={640}
-            height={480}
-            className="absolute inset-0 h-full w-full"
-          />
-
-          {/* Status pill */}
-          <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs text-white backdrop-blur">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                isReady ? (handVisible ? "bg-emerald-400" : "bg-amber-400") : "bg-zinc-400"
-              }`}
-            />
-            {status}
-          </div>
-
-          {/* Live prediction */}
-          {prediction.word && (
-            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-white/95 px-5 py-2 text-lg font-medium text-foreground shadow-lg">
-              {prediction.word}
-              <span className="ml-2 text-sm text-muted-foreground">
-                {Math.round(prediction.confidence * 100)}%
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Side panel */}
-        <aside className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              Current sentence
-            </p>
-            <p className="mt-2 min-h-[3rem] text-lg leading-relaxed">
-              {sentenceBuilder.words.length > 0 ? (
-                sentenceBuilder.words.join(" ")
-              ) : (
-                <span className="text-muted-foreground">Start signing…</span>
-              )}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                onClick={sentenceBuilder.speakNow}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-                style={{ background: "var(--gradient-primary)" }}
-              >
-                Speak
-              </button>
-              <button
-                onClick={() => setTtsEnabled((v) => !v)}
-                className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
-              >
-                Auto-TTS: {ttsEnabled ? "ON" : "OFF"}
-              </button>
-              <button
-                onClick={sentenceBuilder.clear}
-                className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-accent"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              Recognized vocabulary ({vocabulary.length})
-            </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {vocabulary.map((w) => (
+      <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-10">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="overflow-hidden rounded-3xl border border-border bg-stage text-stage-foreground shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stage-foreground/10 px-5 py-4">
+              <div>
+                <h1 className="text-2xl font-semibold sm:text-3xl">Live sign recognition</h1>
+                <p className="mt-1 text-sm text-stage-foreground/70">
+                  {demoMode
+                    ? "Train your own gestures first — fake vocabulary has been removed for accurate demos."
+                    : modelSource === "indexeddb"
+                      ? "Using your browser-trained gesture model."
+                      : "Using the project gesture model."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border border-stage-foreground/10 bg-stage-foreground/10 px-3 py-1.5 text-xs">
                 <span
-                  key={w}
-                  className={`rounded-full border px-2.5 py-1 text-xs ${
-                    prediction.word === w
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground"
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    cameraStarted && handVisible
+                      ? "bg-live"
+                      : cameraStarted
+                        ? "bg-caution"
+                        : "bg-muted-foreground"
                   }`}
-                >
-                  {w}
-                </span>
-              ))}
+                />
+                {status}
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              Session history
-            </p>
-            {sentenceBuilder.history.length === 0 ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Completed sentences appear here.
-              </p>
-            ) : (
-              <ul className="mt-2 divide-y divide-border">
-                {sentenceBuilder.history.map((h, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between gap-3 py-2 text-sm"
+            <div className="relative aspect-[4/3] bg-stage sm:aspect-video lg:aspect-[4/3]">
+              <video
+                ref={videoRef}
+                className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-95"
+                autoPlay
+                muted
+                playsInline
+              />
+              <canvas
+                ref={canvasRef}
+                width={640}
+                height={480}
+                className="absolute inset-0 h-full w-full"
+              />
+
+              {!cameraStarted && (
+                <div className="absolute inset-0 flex items-center justify-center bg-stage/85 px-6 text-center backdrop-blur-sm">
+                  <div className="max-w-md">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+                      <Play className="h-7 w-7" />
+                    </div>
+                    <h2 className="mt-5 text-2xl font-semibold">Start the camera first</h2>
+                    <p className="mt-2 text-sm text-stage-foreground/70">
+                      Browser camera access must be started by a click. This prevents the blocked-camera error you were seeing.
+                    </p>
+                    {cameraError && (
+                      <p className="mt-3 rounded-xl border border-stage-foreground/10 bg-stage-foreground/10 p-3 text-sm">
+                        {cameraError}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                    >
+                      <Play className="h-4 w-4" />
+                      Start camera
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {cameraStarted && !demoMode && prediction.word && (
+                <div className="absolute bottom-5 left-1/2 w-[min(90%,420px)] -translate-x-1/2 rounded-2xl border border-stage-foreground/10 bg-stage-foreground px-5 py-4 text-center text-stage shadow-xl">
+                  <p className="text-xs uppercase text-stage/60">stable prediction</p>
+                  <p className="mt-1 text-3xl font-semibold">{prediction.word}</p>
+                  <p className="mt-1 text-sm text-stage/70">
+                    {Math.round(prediction.confidence * 100)}% confidence
+                  </p>
+                </div>
+              )}
+
+              {cameraStarted && demoMode && (
+                <div className="absolute bottom-5 left-1/2 w-[min(90%,460px)] -translate-x-1/2 rounded-2xl border border-stage-foreground/10 bg-stage-foreground/95 p-4 text-center text-stage shadow-xl">
+                  <p className="text-sm font-medium">No trained model is active</p>
+                  <p className="mt-1 text-xs text-stage/70">
+                    Go to Train, record at least 5 samples for 2+ gestures, then come back here.
+                  </p>
+                  <Link
+                    to="/train"
+                    className="mt-3 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
                   >
-                    <span className="truncate">{h.text}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {h.time}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </aside>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-6 pb-16">
-        <h2 className="text-xl font-semibold">Pipeline</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {[
-            ["Webcam", "getUserMedia"],
-            ["MediaPipe", "21 landmarks/hand"],
-            ["Buffer", "30-frame window"],
-            ["LSTM", "TF.js inference"],
-            ["Sentence", "1.5s pause = end"],
-            ["TTS", "Web Speech API"],
-          ].map(([title, sub]) => (
-            <div key={title} className="rounded-xl border border-border bg-card p-4">
-              <p className="text-sm font-medium">{title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
+                    Open trainer
+                  </Link>
+                </div>
+              )}
             </div>
-          ))}
+          </div>
+
+          <aside className="grid gap-4">
+            <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground">Current sentence</p>
+                  <p className="mt-2 min-h-[5rem] text-2xl font-semibold leading-snug">
+                    {sentenceBuilder.words.length > 0 ? (
+                      sentenceBuilder.words.join(" ")
+                    ) : (
+                      <span className="text-muted-foreground">Waiting for signs</span>
+                    )}
+                  </p>
+                </div>
+                <span className="rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">
+                  {sentenceBuilder.words.length} words
+                </span>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onPointerDown={unlockTts}
+                  onClick={speakCurrent}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+                >
+                  <Volume2 className="h-4 w-4" />
+                  Speak
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={unlockTts}
+                  onClick={enableVoice}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium transition hover:bg-accent"
+                >
+                  <Mic className="h-4 w-4" />
+                  Enable voice
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={unlockTts}
+                  onClick={() => setTtsEnabled((v) => !v)}
+                  className="rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium transition hover:bg-accent"
+                >
+                  Auto-TTS {ttsEnabled ? "ON" : "OFF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={sentenceBuilder.clear}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-medium transition hover:bg-accent"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Clear
+                </button>
+              </div>
+
+              {!sentenceBuilder.ttsReady && (
+                <p className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
+                  Tap Enable voice once before using Auto-TTS. Browsers block speech until the user interacts.
+                </p>
+              )}
+            </section>
+
+            <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <p className="text-xs uppercase text-muted-foreground">Recognition status</p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Camera</span>
+                  <span className="font-medium">{cameraStarted ? "Running" : "Not started"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Hands</span>
+                  <span className="font-medium">{handVisible ? "Detected" : "Not visible"}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Model</span>
+                  <span className="font-medium">
+                    {demoMode ? "Needs training" : modelSource === "indexeddb" ? "Browser trained" : "Project file"}
+                  </span>
+                </div>
+              </div>
+              <Link
+                to="/train"
+                className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold transition hover:bg-accent"
+              >
+                <Sparkles className="h-4 w-4" />
+                Train or improve model
+              </Link>
+            </section>
+
+            <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <p className="text-xs uppercase text-muted-foreground">Session history</p>
+              {sentenceBuilder.history.length === 0 ? (
+                <p className="mt-3 text-sm text-muted-foreground">Spoken sentences appear here.</p>
+              ) : (
+                <ul className="mt-3 divide-y divide-border">
+                  {sentenceBuilder.history.map((h, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="truncate">{h.text}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{h.time}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </aside>
         </div>
       </section>
     </main>
