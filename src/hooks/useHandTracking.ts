@@ -15,6 +15,10 @@ const STABLE_MIN_VOTES = 4;
 
 type Prediction = { word: string; confidence: number };
 type ModelSource = "indexeddb" | "public" | "demo";
+type Landmark = { x?: number; y?: number; z?: number };
+type HandResults = { multiHandLandmarks?: Landmark[][] };
+type CameraHandle = { stop?: () => void };
+type HandsHandle = { close?: () => void };
 
 export interface HandTrackingOptions {
   confidenceThreshold?: number;
@@ -29,7 +33,7 @@ function emptyFeatures() {
   return new Array(FEATURE_LEN).fill(0);
 }
 
-function normalizeHand(landmarks: any[] | undefined) {
+function normalizeHand(landmarks: Landmark[] | undefined) {
   if (!landmarks?.length) return new Array(63).fill(0);
 
   const wrist = landmarks[0];
@@ -50,7 +54,7 @@ function normalizeHand(landmarks: any[] | undefined) {
   ]);
 }
 
-function extractKeypoints(handsLandmarks: any[]) {
+function extractKeypoints(handsLandmarks: Landmark[][]) {
   if (!handsLandmarks.length) return emptyFeatures();
   const normalized = handsLandmarks.slice(0, 2).flatMap((hand) => normalizeHand(hand));
   while (normalized.length < FEATURE_LEN) normalized.push(0);
@@ -77,8 +81,8 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
   const modelRef = useRef<tf.LayersModel | null>(null);
   const labelsRef = useRef<string[]>([]);
   const sequenceRef = useRef<number[][]>([]);
-  const cameraRef = useRef<any>(null);
-  const handsRef = useRef<any>(null);
+  const cameraRef = useRef<CameraHandle | null>(null);
+  const handsRef = useRef<HandsHandle | null>(null);
   const lastInferRef = useRef(0);
   const predictionWindowRef = useRef<Prediction[]>([]);
   const onFrameRef = useRef(onFrame);
@@ -176,7 +180,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
   }, []);
 
   const drawSkeleton = useCallback(
-    (landmarksList: any[], ctx: CanvasRenderingContext2D, w: number, h: number) => {
+    (landmarksList: Landmark[][], ctx: CanvasRenderingContext2D, w: number, h: number) => {
       const connections = [
         [0, 1], [1, 2], [2, 3], [3, 4],
         [0, 5], [5, 6], [6, 7], [7, 8],
@@ -206,7 +210,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
   );
 
   const onResults = useCallback(
-    async (results: any) => {
+    async (results: HandResults) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
