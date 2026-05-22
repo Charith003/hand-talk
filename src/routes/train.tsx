@@ -152,8 +152,9 @@ function TrainPage() {
       );
       setMessage("Model trained and saved. Open the live recognizer to test it.");
       setModelVersion((v) => v + 1);
-    } catch (e: any) {
-      setMessage(`Training failed: ${e?.message ?? e}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setMessage(`Training failed: ${errorMessage}`);
     } finally {
       setTraining(false);
     }
