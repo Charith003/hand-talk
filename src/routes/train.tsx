@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Play, Plus, Trash2, Video } from "lucide-react";
+import { CheckCircle2, Play, Plus, Trash2, Video, Upload, Radio, Brain } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import {
@@ -132,7 +132,8 @@ function TrainPage() {
   const minPerLabel = countsByLabel.length
     ? Math.min(...countsByLabel.map((item) => item.count))
     : 0;
-  const canTrain = labels.length >= 2 && minPerLabel >= 5 && !training;
+  const MIN_PER_LABEL = 3;
+  const canTrain = labels.length >= 2 && minPerLabel >= MIN_PER_LABEL && !training;
 
   const handleTrain = async () => {
     if (!canTrain) return;
