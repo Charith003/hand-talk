@@ -9,6 +9,24 @@ export const FEATURE_LEN = 126;
 
 export type Sample = { label: string; sequence: number[][] };
 
+// Build a 30-frame sequence from a single keypoint snapshot (used for image uploads).
+export function sequenceFromSingleFrame(keypoints: number[]): number[][] {
+  return Array.from({ length: SEQ_LENGTH }, () => [...keypoints]);
+}
+
+// Build a 30-frame sequence by evenly sampling collected frames.
+export function sequenceFromFrames(frames: number[][]): number[][] | null {
+  const valid = frames.filter((f) => f.length === FEATURE_LEN);
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return sequenceFromSingleFrame(valid[0]);
+  const out: number[][] = [];
+  for (let i = 0; i < SEQ_LENGTH; i++) {
+    const idx = Math.min(valid.length - 1, Math.floor((i / (SEQ_LENGTH - 1)) * (valid.length - 1)));
+    out.push([...valid[idx]]);
+  }
+  return out;
+}
+
 export function loadLabels(): string[] {
   try {
     const raw = localStorage.getItem(LABELS_LS_KEY);

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Play, Plus, Trash2, Video } from "lucide-react";
+import { CheckCircle2, Play, Plus, Trash2, Video, Upload, Radio, Brain } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import {
@@ -132,7 +132,8 @@ function TrainPage() {
   const minPerLabel = countsByLabel.length
     ? Math.min(...countsByLabel.map((item) => item.count))
     : 0;
-  const canTrain = labels.length >= 2 && minPerLabel >= 5 && !training;
+  const MIN_PER_LABEL = 3;
+  const canTrain = labels.length >= 2 && minPerLabel >= MIN_PER_LABEL && !training;
 
   const handleTrain = async () => {
     if (!canTrain) return;
@@ -190,9 +191,21 @@ function TrainPage() {
           <nav className="flex items-center gap-2 text-sm">
             <Link
               to="/"
-              className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
             >
-              Live
+              <Radio className="h-4 w-4" /> Live
+            </Link>
+            <Link
+              to="/train"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground transition hover:opacity-90"
+            >
+              <Brain className="h-4 w-4" /> Train
+            </Link>
+            <Link
+              to="/upload"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            >
+              <Upload className="h-4 w-4" /> Upload dataset
             </Link>
             <Link
               to="/about"
@@ -303,6 +316,53 @@ function TrainPage() {
           </section>
 
           <aside className="grid gap-4">
+            <section className="rounded-3xl border-2 border-primary/40 bg-card p-5 shadow-md ring-1 ring-primary/10">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs uppercase text-primary">Train model</p>
+                <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-secondary-foreground">
+                  {labels.length} labels · {samples.length} samples
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleTrain}
+                disabled={!canTrain}
+                className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+              >
+                {training
+                  ? `Training epoch ${trainLog?.epoch ?? 0}/50`
+                  : canTrain
+                    ? "Train model now"
+                    : "Train model"}
+              </button>
+              {!canTrain && !training && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Need 2+ labels and {MIN_PER_LABEL}+ samples each. Lowest currently: {minPerLabel}.
+                </p>
+              )}
+              {trainLog && (
+                <div className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
+                  <p>Epoch <span className="font-mono">{trainLog.epoch}</span></p>
+                  <p>Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span></p>
+                  <p>Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span></p>
+                </div>
+              )}
+              {message && (
+                <p className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
+                  {message}
+                </p>
+              )}
+              {message.includes("trained") && (
+                <Link
+                  to="/"
+                  className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold transition hover:bg-accent"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Open live recognizer
+                </Link>
+              )}
+            </section>
+
             <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
               <p className="text-xs uppercase text-muted-foreground">1 · Gesture labels</p>
               <div className="mt-3 flex gap-2">
@@ -375,57 +435,12 @@ function TrainPage() {
                 {recording ? "Recording…" : countdown > 0 ? "Get ready…" : "Record 30-frame sample"}
               </button>
               <p className="mt-3 text-xs text-muted-foreground">
-                Record 8–15 samples per gesture for best accuracy. Keep every gesture visually
-                different.
+                Record at least {MIN_PER_LABEL} samples per gesture (8–15 for best accuracy).
               </p>
-            </section>
-
-            <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-              <p className="text-xs uppercase text-muted-foreground">3 · Train model</p>
-              <button
-                type="button"
-                onClick={handleTrain}
-                disabled={!canTrain}
-                className="mt-4 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
-              >
-                {training ? `Training epoch ${trainLog?.epoch ?? 0}/50` : "Train model"}
-              </button>
-              {!canTrain && !training && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Need 2+ labels and 5+ samples per label. Lowest label currently has {minPerLabel}.
-                </p>
-              )}
-              {trainLog && (
-                <div className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
-                  <p>
-                    Epoch <span className="font-mono">{trainLog.epoch}</span>
-                  </p>
-                  <p>
-                    Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span>
-                  </p>
-                  <p>
-                    Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span>
-                  </p>
-                </div>
-              )}
-              {message && (
-                <p className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
-                  {message}
-                </p>
-              )}
-              {message.includes("trained") && (
-                <Link
-                  to="/"
-                  className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold transition hover:bg-accent"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Open live recognizer
-                </Link>
-              )}
               <button
                 type="button"
                 onClick={resetAll}
-                className="mt-3 w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                className="mt-3 w-full rounded-xl border border-border bg-background px-4 py-2 text-xs text-muted-foreground transition hover:bg-accent hover:text-foreground"
               >
                 Reset everything
               </button>

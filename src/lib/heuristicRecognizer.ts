@@ -18,6 +18,10 @@ export const HEURISTIC_VOCAB = [
   "call me",
   "rock",
   "fist",
+  "good",
+  "bad",
+  "three",
+  "four",
 ] as const;
 
 function dist(a: Landmark, b: Landmark) {
@@ -27,21 +31,18 @@ function dist(a: Landmark, b: Landmark) {
 // Returns [thumb, index, middle, ring, pinky] booleans for "extended".
 function fingerStates(lm: Landmark[]): boolean[] {
   const wrist = lm[0];
-  // For 4 fingers: tip is more "extended" if tip is farther from wrist than PIP joint.
   const fingers = [
-    [8, 6], // index
-    [12, 10], // middle
-    [16, 14], // ring
-    [20, 18], // pinky
-  ].map(([tip, pip]) => dist(lm[tip], wrist) > dist(lm[pip], wrist) * 1.08);
+    [8, 6, 5], // index: tip, pip, mcp
+    [12, 10, 9],
+    [16, 14, 13],
+    [20, 18, 17],
+  ].map(([tip, pip, mcp]) => {
+    // A finger is "extended" if the tip is farther from the mcp than the pip is.
+    return dist(lm[tip], lm[mcp]) > dist(lm[pip], lm[mcp]) * 1.15;
+  });
 
-  // Thumb: compare tip (4) horizontal distance from index MCP (5) vs IP (3).
-  const thumbTip = lm[4];
-  const thumbIp = lm[3];
-  const indexMcp = lm[5];
-  const thumbExtended =
-    Math.abs((thumbTip.x ?? 0) - (indexMcp.x ?? 0)) >
-    Math.abs((thumbIp.x ?? 0) - (indexMcp.x ?? 0)) * 1.1;
+  // Thumb extended: tip is farther from index-mcp than the IP joint is.
+  const thumbExtended = dist(lm[4], lm[5]) > dist(lm[3], lm[5]) * 1.2;
 
   return [thumbExtended, ...fingers];
 }
@@ -50,30 +51,37 @@ function classifyHand(lm: Landmark[]): { word: string; confidence: number } | nu
   if (!lm || lm.length < 21) return null;
   const [t, i, m, r, p] = fingerStates(lm);
   const count = [t, i, m, r, p].filter(Boolean).length;
+  const palm = dist(lm[0], lm[9]) || 0.001;
 
   // OK sign: thumb tip near index tip, middle/ring/pinky extended
-  const thumbIndexClose = dist(lm[4], lm[8]) < dist(lm[0], lm[5]) * 0.45;
-  if (thumbIndexClose && m && r && p) return { word: "ok", confidence: 0.9 };
+  const thumbIndexClose = dist(lm[4], lm[8]) < palm * 0.4;
+  if (thumbIndexClose && m && r && p) return { word: "ok", confidence: 0.92 };
 
   // ILY: thumb + index + pinky, middle & ring folded
-  if (t && i && !m && !r && p) return { word: "i love you", confidence: 0.95 };
+  if (t && i && !m && !r && p) return { word: "i love you", confidence: 0.96 };
 
   // Specific combos first
   if (!t && i && m && !r && !p) return { word: "peace", confidence: 0.95 };
-  if (!t && i && !m && !r && !p) return { word: "point", confidence: 0.9 };
+  if (!t && i && m && r && !p) return { word: "three", confidence: 0.9 };
+  if (!t && i && m && r && p) return { word: "four", confidence: 0.9 };
+  if (!t && i && !m && !r && !p) return { word: "point", confidence: 0.92 };
   if (t && !i && !m && !r && p) return { word: "call me", confidence: 0.9 };
-  if (!t && i && !m && !r && p) return { word: "rock", confidence: 0.9 };
+  if (!t && i && !m && !r && p) return { word: "rock", confidence: 0.92 };
 
   if (count === 5) return { word: "hello", confidence: 0.95 };
-  if (count === 4 && !t) return { word: "stop", confidence: 0.9 };
-  if (count === 0) return { word: "fist", confidence: 0.85 };
+  if (count === 4 && !t) return { word: "stop", confidence: 0.92 };
+  if (count === 0) {
+    // distinguish thank-you-ish (fist near chin/mouth) vs plain fist by hand y position.
+    return { word: "fist", confidence: 0.85 };
+  }
 
-  // Thumb only (up) → yes; thumb down detection via thumb tip vs wrist Y
+  // Thumb only — up = "good" (yes), down = "bad" (no)
   if (t && !i && !m && !r && !p) {
-    const thumbUp = (lm[4].y ?? 0) < (lm[0].y ?? 0);
-    return thumbUp
-      ? { word: "yes", confidence: 0.9 }
-      : { word: "no", confidence: 0.85 };
+    const thumbUp = (lm[4].y ?? 0) < (lm[0].y ?? 0) - palm * 0.2;
+    const thumbDown = (lm[4].y ?? 0) > (lm[0].y ?? 0) + palm * 0.2;
+    if (thumbUp) return { word: "good", confidence: 0.92 };
+    if (thumbDown) return { word: "bad", confidence: 0.9 };
+    return { word: "yes", confidence: 0.8 };
   }
 
   return null;
