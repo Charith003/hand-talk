@@ -128,7 +128,8 @@ function UploadPage() {
       const h = await ensureHands();
       lastResultsRef.current = null;
       await h.send({ image: img });
-      const hands = lastResultsRef.current?.multiHandLandmarks ?? [];
+      const res: HandResults | null = lastResultsRef.current;
+      const hands = res?.multiHandLandmarks ?? [];
       if (!hands.length) return null;
       const kp = extractKeypoints(hands);
       return sequenceFromFrames([kp]);
@@ -160,7 +161,8 @@ function UploadPage() {
         });
         lastResultsRef.current = null;
         await h.send({ image: video });
-        const hands = lastResultsRef.current?.multiHandLandmarks ?? [];
+        const res: HandResults | null = lastResultsRef.current;
+        const hands = res?.multiHandLandmarks ?? [];
         if (hands.length) frames.push(extractKeypoints(hands));
       }
       return sequenceFromFrames(frames);
