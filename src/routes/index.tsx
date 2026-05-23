@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Mic, Mic2, Play, RotateCcw, Sparkles, Volume2, Zap, Brain } from "lucide-react";
+import { Mic, Mic2, Play, RotateCcw, Sparkles, Volume2, Zap, Brain, Upload } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { useSentenceBuilder } from "@/hooks/useSentenceBuilder";
@@ -70,9 +70,15 @@ function Index() {
           <nav className="flex items-center gap-2 text-sm">
             <Link
               to="/train"
-              className="rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground transition hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
             >
-              Train
+              <Brain className="h-4 w-4" /> Train
+            </Link>
+            <Link
+              to="/upload"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            >
+              <Upload className="h-4 w-4" /> Upload dataset
             </Link>
             <Link
               to="/about"
