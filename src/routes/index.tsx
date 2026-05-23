@@ -293,11 +293,13 @@ function Index() {
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Model</span>
                   <span className="font-medium">
-                    {demoMode
-                      ? "Needs training"
-                      : modelSource === "indexeddb"
-                        ? "Browser trained"
-                        : "Project file"}
+                    {modelSource === "heuristic"
+                      ? "Pre-trained (built-in)"
+                      : demoMode
+                        ? "Needs training"
+                        : modelSource === "indexeddb"
+                          ? "Browser trained"
+                          : "Project file"}
                   </span>
                 </div>
               </div>
