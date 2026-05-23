@@ -6,6 +6,7 @@ import {
   SEQ_LENGTH as S_LEN,
   FEATURE_LEN as F_LEN,
 } from "@/lib/gestureStore";
+import { recognizeHeuristic, HEURISTIC_VOCAB } from "@/lib/heuristicRecognizer";
 
 const SEQ_LENGTH = S_LEN;
 const FEATURE_LEN = F_LEN;
@@ -14,7 +15,7 @@ const STABLE_WINDOW = 6;
 const STABLE_MIN_VOTES = 4;
 
 type Prediction = { word: string; confidence: number };
-type ModelSource = "indexeddb" | "public" | "demo";
+type ModelSource = "indexeddb" | "public" | "heuristic" | "demo";
 type Landmark = { x?: number; y?: number; z?: number };
 type HandResults = { multiHandLandmarks?: Landmark[][] };
 type CameraHandle = { stop?: () => void };
@@ -27,6 +28,7 @@ export interface HandTrackingOptions {
   enableInference?: boolean;
   modelVersion?: number;
   autoStart?: boolean;
+  mode?: "auto" | "model" | "heuristic";
 }
 
 function emptyFeatures() {
@@ -74,6 +76,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     enableInference = true,
     modelVersion = 0,
     autoStart = false,
+    mode = "auto",
   } = options;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -115,6 +118,15 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         /* noop */
       }
       modelRef.current = null;
+
+      if (mode === "heuristic") {
+        labelsRef.current = [...HEURISTIC_VOCAB];
+        setDemoMode(false);
+        setModelSource("heuristic");
+        setStatus("Pre-trained signs ready");
+        setIsReady(true);
+        return;
+      }
 
       try {
         const list = await tf.io.listModels();
@@ -176,9 +188,16 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       } catch {
         if (cancelled) return;
         labelsRef.current = [];
-        setDemoMode(true);
-        setModelSource("demo");
-        setStatus("Train a model to start recognition");
+        if (mode === "auto") {
+          labelsRef.current = [...HEURISTIC_VOCAB];
+          setDemoMode(false);
+          setModelSource("heuristic");
+          setStatus("Pre-trained signs ready");
+        } else {
+          setDemoMode(true);
+          setModelSource("demo");
+          setStatus("Train a model to start recognition");
+        }
       } finally {
         if (!cancelled) setIsReady(true);
       }
@@ -186,7 +205,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [modelVersion]);
+  }, [modelVersion, mode]);
 
   const startCamera = useCallback(() => {
     setCameraError("");
@@ -259,7 +278,39 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       if (sequenceRef.current.length > SEQ_LENGTH) sequenceRef.current.shift();
       onFrameRef.current?.(keypoints, handCount);
 
-      if (!enableInference || demoMode || !modelRef.current) return;
+      if (!enableInference || demoMode) return;
+
+      // Heuristic recognizer path (no trained model required).
+      if (modelSource === "heuristic") {
+        const now = performance.now();
+        if (now - lastInferRef.current < 110) return;
+        lastInferRef.current = now;
+        const guess = recognizeHeuristic(handsLandmarks);
+        const item: Prediction = guess ?? { word: "", confidence: 0 };
+        predictionWindowRef.current.push(item);
+        if (predictionWindowRef.current.length > STABLE_WINDOW)
+          predictionWindowRef.current.shift();
+        const votes = new Map<string, { count: number; total: number }>();
+        for (const it of predictionWindowRef.current) {
+          if (!it.word) continue;
+          const e = votes.get(it.word) ?? { count: 0, total: 0 };
+          votes.set(it.word, { count: e.count + 1, total: e.total + it.confidence });
+        }
+        let stable: Prediction = { word: "", confidence: item.confidence };
+        votes.forEach((value, key) => {
+          if (
+            value.count >= STABLE_MIN_VOTES &&
+            value.count > (votes.get(stable.word)?.count ?? 0)
+          ) {
+            stable = { word: key, confidence: value.total / value.count };
+          }
+        });
+        setPrediction(stable);
+        if (stable.word) onPrediction?.(stable);
+        return;
+      }
+
+      if (!modelRef.current) return;
       if (sequenceRef.current.length < SEQ_LENGTH) return;
 
       const now = performance.now();
@@ -300,7 +351,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       setPrediction(stable);
       if (stable.word) onPrediction?.(stable);
     },
-    [drawSkeleton, demoMode, confidenceThreshold, onPrediction, enableInference],
+    [drawSkeleton, demoMode, confidenceThreshold, onPrediction, enableInference, modelSource],
   );
 
   useEffect(() => {
