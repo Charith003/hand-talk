@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Mic, Mic2, Play, RotateCcw, Sparkles, Volume2 } from "lucide-react";
+import { Mic, Mic2, Play, RotateCcw, Sparkles, Volume2, Zap, Brain } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { useSentenceBuilder } from "@/hooks/useSentenceBuilder";
@@ -20,6 +20,7 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [mode, setMode] = useState<"heuristic" | "model">("heuristic");
   const sentenceBuilder = useSentenceBuilder({ ttsEnabled });
   const { addPrediction, unlockTts } = sentenceBuilder;
 
@@ -40,7 +41,8 @@ function Index() {
     cameraStarted,
     cameraError,
     startCamera,
-  } = useHandTracking({ onPrediction });
+    vocabulary,
+  } = useHandTracking({ onPrediction, mode });
 
   const enableVoice = () => {
     unlockTts();
@@ -89,11 +91,13 @@ function Index() {
               <div>
                 <h1 className="text-2xl font-semibold sm:text-3xl">Live sign recognition</h1>
                 <p className="mt-1 text-sm text-stage-foreground/70">
-                  {demoMode
-                    ? "Train your own gestures first — fake vocabulary has been removed for accurate demos."
-                    : modelSource === "indexeddb"
-                      ? "Using your browser-trained gesture model."
-                      : "Using the project gesture model."}
+                  {modelSource === "heuristic"
+                    ? "Pre-trained signs active — no training required."
+                    : demoMode
+                      ? "No trained model yet — switch to pre-trained or train your own."
+                      : modelSource === "indexeddb"
+                        ? "Using your browser-trained gesture model."
+                        : "Using the project gesture model."}
                 </p>
               </div>
               <div className="flex items-center gap-2 rounded-full border border-stage-foreground/10 bg-stage-foreground/10 px-3 py-1.5 text-xs">
@@ -108,6 +112,38 @@ function Index() {
                 />
                 {status}
               </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-b border-stage-foreground/10 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setMode("heuristic")}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  mode === "heuristic"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-stage-foreground/10 text-stage-foreground/80 hover:bg-stage-foreground/20"
+                }`}
+              >
+                <Zap className="h-3.5 w-3.5" />
+                Pre-trained signs
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("model")}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  mode === "model"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-stage-foreground/10 text-stage-foreground/80 hover:bg-stage-foreground/20"
+                }`}
+              >
+                <Brain className="h-3.5 w-3.5" />
+                Trained model
+              </button>
+              {mode === "heuristic" && vocabulary.length > 0 && (
+                <span className="ml-auto text-xs text-stage-foreground/60">
+                  {vocabulary.length} built-in signs
+                </span>
+              )}
             </div>
 
             <div className="relative aspect-[4/3] bg-stage sm:aspect-video lg:aspect-[4/3]">
