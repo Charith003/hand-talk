@@ -77,7 +77,7 @@ function UploadPage() {
   const [trainLog, setTrainLog] = useState<{ epoch: number; loss: number; acc: number } | null>(null);
 
   const handsRef = useRef<HandsHandle | null>(null);
-  const lastResultsRef = useRef<HandResults | null>(null);
+  const lastResultsRef = useRef<HandResults | null>(null as HandResults | null);
 
   useEffect(() => saveLabels(labels), [labels]);
   useEffect(() => saveSamples(samples), [samples]);
@@ -126,7 +126,7 @@ function UploadPage() {
         img.src = url;
       });
       const h = await ensureHands();
-      lastResultsRef.current = null;
+      lastResultsRef.current = null as HandResults | null;
       await h.send({ image: img });
       const res: HandResults | null = lastResultsRef.current;
       const hands = res?.multiHandLandmarks ?? [];
@@ -159,7 +159,7 @@ function UploadPage() {
           video.onseeked = () => res();
           video.currentTime = Math.min(duration - 0.01, t);
         });
-        lastResultsRef.current = null;
+        lastResultsRef.current = null as HandResults | null;
         await h.send({ image: video });
         const res: HandResults | null = lastResultsRef.current;
         const hands = res?.multiHandLandmarks ?? [];
