@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Brain, CheckCircle2, FileImage, FileVideo, Loader2, Radio, Trash2, Upload as UploadIcon } from "lucide-react";
 import {
   FEATURE_LEN,
+  MIN_SAMPLES_PER_LABEL,
   loadLabels,
   saveLabels,
   loadSamples,
@@ -211,8 +212,8 @@ function UploadPage() {
   async function handleTrain() {
     const counts = labels.map((l) => samples.filter((s) => s.label === l).length);
     const minPer = counts.length ? Math.min(...counts) : 0;
-    if (labels.length < 2 || minPer < 3) {
-      setMessage("Need 2+ labels with at least 3 samples each before training.");
+    if (labels.length < 2 || minPer < MIN_SAMPLES_PER_LABEL) {
+      setMessage(`Need 2+ labels with at least ${MIN_SAMPLES_PER_LABEL} samples each before training.`);
       return;
     }
     setTraining(true);
@@ -360,11 +361,17 @@ function UploadPage() {
               <button
                 type="button"
                 onClick={handleTrain}
-                disabled={training || labels.length < 2}
+                disabled={training}
                 className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
               >
                 {training ? `Training epoch ${trainLog?.epoch ?? 0}/50` : "Train model now"}
               </button>
+              {!training && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Need 2+ labels and {MIN_SAMPLES_PER_LABEL}+ samples each. Lowest currently:{" "}
+                  {labels.length ? Math.min(...countsByLabel.map((item) => item.count)) : 0}.
+                </p>
+              )}
               {trainLog && (
                 <div className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
                   <p>Epoch <span className="font-mono">{trainLog.epoch}</span></p>
