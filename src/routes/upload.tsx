@@ -1,6 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Brain, CheckCircle2, FileImage, FileVideo, Loader2, Radio, Trash2, Upload as UploadIcon } from "lucide-react";
+import {
+  Brain,
+  CheckCircle2,
+  FileImage,
+  FileVideo,
+  Loader2,
+  Radio,
+  Trash2,
+  Upload as UploadIcon,
+} from "lucide-react";
 import {
   FEATURE_LEN,
   MIN_SAMPLES_PER_LABEL,
@@ -32,7 +41,9 @@ type HandResults = { multiHandLandmarks?: Landmark[][] };
 type HandsHandle = {
   setOptions: (opts: Record<string, number>) => void;
   onResults: (cb: (r: HandResults) => void) => void;
-  send: (input: { image: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement }) => Promise<void>;
+  send: (input: {
+    image: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
+  }) => Promise<void>;
   close?: () => void;
 };
 
@@ -75,7 +86,9 @@ function UploadPage() {
   });
   const [message, setMessage] = useState("");
   const [training, setTraining] = useState(false);
-  const [trainLog, setTrainLog] = useState<{ epoch: number; loss: number; acc: number } | null>(null);
+  const [trainLog, setTrainLog] = useState<{ epoch: number; loss: number; acc: number } | null>(
+    null,
+  );
 
   const handsRef = useRef<HandsHandle | null>(null);
   const lastResultsRef = useRef<HandResults | null>(null as HandResults | null);
@@ -188,9 +201,7 @@ function UploadPage() {
       const f = files[i];
       setProgress({ current: i + 1, total: files.length, file: f.name });
       try {
-        const seq = f.type.startsWith("video/")
-          ? await processVideo(f)
-          : await processImage(f);
+        const seq = f.type.startsWith("video/") ? await processVideo(f) : await processImage(f);
         if (seq) {
           setSamples((prev) => [...prev, { label: activeLabel, sequence: seq }]);
           added++;
@@ -213,7 +224,9 @@ function UploadPage() {
     const counts = labels.map((l) => samples.filter((s) => s.label === l).length);
     const minPer = counts.length ? Math.min(...counts) : 0;
     if (labels.length < 2 || minPer < MIN_SAMPLES_PER_LABEL) {
-      setMessage(`Need 2+ labels with at least ${MIN_SAMPLES_PER_LABEL} samples each before training.`);
+      setMessage(
+        `Need 2+ labels with at least ${MIN_SAMPLES_PER_LABEL} samples each before training.`,
+      );
       return;
     }
     setTraining(true);
@@ -244,17 +257,28 @@ function UploadPage() {
             </span>
             <span>
               <span className="block text-base font-semibold">Dataset Upload</span>
-              <span className="block text-xs text-muted-foreground">images · videos · auto-train</span>
+              <span className="block text-xs text-muted-foreground">
+                images · videos · auto-train
+              </span>
             </span>
           </Link>
           <nav className="flex items-center gap-2 text-sm">
-            <Link to="/" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            >
               <Radio className="h-4 w-4" /> Live
             </Link>
-            <Link to="/train" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground">
+            <Link
+              to="/train"
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
+            >
               <Brain className="h-4 w-4" /> Train
             </Link>
-            <Link to="/upload" className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground transition hover:opacity-90">
+            <Link
+              to="/upload"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground transition hover:opacity-90"
+            >
               <UploadIcon className="h-4 w-4" /> Upload dataset
             </Link>
           </nav>
@@ -263,7 +287,9 @@ function UploadPage() {
 
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-10">
         <div className="mb-6">
-          <h1 className="text-3xl font-semibold sm:text-4xl">Train from uploaded images or videos</h1>
+          <h1 className="text-3xl font-semibold sm:text-4xl">
+            Train from uploaded images or videos
+          </h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
             Pick a gesture label, then upload <strong>images</strong> (one sign per image) or
             <strong> short videos</strong> (one sign per clip). Hand landmarks are extracted in your
@@ -278,7 +304,9 @@ function UploadPage() {
               <input
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addLabel(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addLabel();
+                }}
                 placeholder="e.g. hello"
                 className="min-w-0 flex-1 rounded-xl border border-input bg-background px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-ring"
               />
@@ -306,7 +334,10 @@ function UploadPage() {
                   <span className="text-xs opacity-70">· {count}</span>
                   <span
                     role="button"
-                    onClick={(ev) => { ev.stopPropagation(); removeLabel(label); }}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      removeLabel(label);
+                    }}
                     className="rounded p-0.5 opacity-60 hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -314,24 +345,46 @@ function UploadPage() {
                 </button>
               ))}
               {labels.length === 0 && (
-                <p className="text-sm text-muted-foreground">Add at least two labels (e.g. hello and yes).</p>
+                <p className="text-sm text-muted-foreground">
+                  Add at least two labels (e.g. hello and yes).
+                </p>
               )}
             </div>
 
-            <p className="mt-8 text-xs uppercase text-muted-foreground">2 · Upload images or videos</p>
+            <p className="mt-8 text-xs uppercase text-muted-foreground">
+              2 · Upload images or videos
+            </p>
             <p className="mt-2 text-sm text-muted-foreground">
               Selected: <span className="font-medium text-foreground">{activeLabel || "none"}</span>
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border px-4 py-8 text-sm font-medium transition hover:border-primary hover:bg-primary/5 ${(!activeLabel || busy) ? "pointer-events-none opacity-50" : ""}`}>
+              <label
+                className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border px-4 py-8 text-sm font-medium transition hover:border-primary hover:bg-primary/5 ${!activeLabel || busy ? "pointer-events-none opacity-50" : ""}`}
+              >
                 <FileImage className="h-5 w-5" />
                 Upload images
-                <input type="file" accept="image/*" multiple className="hidden" onChange={onFiles} disabled={!activeLabel || busy} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={onFiles}
+                  disabled={!activeLabel || busy}
+                />
               </label>
-              <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border px-4 py-8 text-sm font-medium transition hover:border-primary hover:bg-primary/5 ${(!activeLabel || busy) ? "pointer-events-none opacity-50" : ""}`}>
+              <label
+                className={`flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border px-4 py-8 text-sm font-medium transition hover:border-primary hover:bg-primary/5 ${!activeLabel || busy ? "pointer-events-none opacity-50" : ""}`}
+              >
                 <FileVideo className="h-5 w-5" />
                 Upload videos
-                <input type="file" accept="video/*" multiple className="hidden" onChange={onFiles} disabled={!activeLabel || busy} />
+                <input
+                  type="file"
+                  accept="video/*"
+                  multiple
+                  className="hidden"
+                  onChange={onFiles}
+                  disabled={!activeLabel || busy}
+                />
               </label>
             </div>
 
@@ -339,7 +392,8 @@ function UploadPage() {
               <div className="mt-4 rounded-xl border border-border bg-secondary p-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Processing {progress.current}/{progress.total}: <span className="truncate">{progress.file}</span>
+                  Processing {progress.current}/{progress.total}:{" "}
+                  <span className="truncate">{progress.file}</span>
                 </div>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-background">
                   <div
@@ -351,7 +405,9 @@ function UploadPage() {
             )}
 
             {message && !busy && (
-              <p className="mt-4 rounded-xl bg-secondary p-3 text-sm text-secondary-foreground">{message}</p>
+              <p className="mt-4 rounded-xl bg-secondary p-3 text-sm text-secondary-foreground">
+                {message}
+              </p>
             )}
           </section>
 
@@ -374,9 +430,15 @@ function UploadPage() {
               )}
               {trainLog && (
                 <div className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
-                  <p>Epoch <span className="font-mono">{trainLog.epoch}</span></p>
-                  <p>Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span></p>
-                  <p>Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span></p>
+                  <p>
+                    Epoch <span className="font-mono">{trainLog.epoch}</span>
+                  </p>
+                  <p>
+                    Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span>
+                  </p>
+                  <p>
+                    Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span>
+                  </p>
                 </div>
               )}
               {message.includes("trained") && (

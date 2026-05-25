@@ -346,15 +346,19 @@ function TrainPage() {
                     : "Train model"}
               </button>
               {!training && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {trainRequirementText}
-                </p>
+                <p className="mt-2 text-xs text-muted-foreground">{trainRequirementText}</p>
               )}
               {trainLog && (
                 <div className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
-                  <p>Epoch <span className="font-mono">{trainLog.epoch}</span></p>
-                  <p>Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span></p>
-                  <p>Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span></p>
+                  <p>
+                    Epoch <span className="font-mono">{trainLog.epoch}</span>
+                  </p>
+                  <p>
+                    Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span>
+                  </p>
+                  <p>
+                    Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span>
+                  </p>
                 </div>
               )}
               {message && (
