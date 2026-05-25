@@ -13,7 +13,7 @@ export function AppHeader({ title = "SignSpeak", subtitle = "live · train · up
 
   return (
     <header className="border-b border-border bg-card/80 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
         <Link to="/" className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
             <Mic2 className="h-5 w-5" />
@@ -23,7 +23,7 @@ export function AppHeader({ title = "SignSpeak", subtitle = "live · train · up
             <span className="block text-xs text-muted-foreground">{subtitle}</span>
           </span>
         </Link>
-        <nav className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
+        <nav className="flex flex-wrap items-center gap-2 text-sm sm:justify-end">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.to;
