@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Mic, Mic2, Play, RotateCcw, Sparkles, Volume2, Zap, Brain, Upload } from "lucide-react";
+import { Mic, Play, RotateCcw, Sparkles, Volume2, Zap, Brain } from "lucide-react";
 import { useCallback, useState } from "react";
+import { AppHeader } from "@/components/AppHeader";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { useSentenceBuilder } from "@/hooks/useSentenceBuilder";
 
@@ -56,39 +57,7 @@ function Index() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-              <Mic2 className="h-5 w-5" />
-            </span>
-            <span>
-              <span className="block text-base font-semibold">SignSpeak</span>
-              <span className="block text-xs text-muted-foreground">train · sign · speak</span>
-            </span>
-          </Link>
-          <nav className="flex items-center gap-2 text-sm">
-            <Link
-              to="/train"
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              <Brain className="h-4 w-4" /> Train
-            </Link>
-            <Link
-              to="/upload"
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              <Upload className="h-4 w-4" /> Upload dataset
-            </Link>
-            <Link
-              to="/about"
-              className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              About
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <AppHeader />
 
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-10">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
