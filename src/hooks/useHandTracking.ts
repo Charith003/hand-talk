@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as tf from "@tensorflow/tfjs";
 import {
-  MODEL_KEY,
+  classifySequence,
+  loadCustomClassifier,
   loadLabels,
   SEQ_LENGTH as S_LEN,
   FEATURE_LEN as F_LEN,
+  type TrainedGestureClassifier,
 } from "@/lib/gestureStore";
 import { recognizeHeuristic, HEURISTIC_VOCAB } from "@/lib/heuristicRecognizer";
 
@@ -82,6 +84,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modelRef = useRef<tf.LayersModel | null>(null);
+  const classifierRef = useRef<TrainedGestureClassifier | null>(null);
   const labelsRef = useRef<string[]>([]);
   const sequenceRef = useRef<number[][]>([]);
   const cameraRef = useRef<CameraHandle | null>(null);
@@ -118,6 +121,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         /* noop */
       }
       modelRef.current = null;
+      classifierRef.current = null;
 
       if (mode === "heuristic") {
         labelsRef.current = [...HEURISTIC_VOCAB];
@@ -128,37 +132,15 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         return;
       }
 
-      try {
-        const list = await tf.io.listModels();
-        if (list[MODEL_KEY]) {
-          const stored = loadLabels();
-          if (stored.length > 0) {
-            setStatus("Loading your trained model...");
-            const model = await tf.loadLayersModel(MODEL_KEY);
-            if (getClassCount(model) !== stored.length) {
-              model.dispose();
-              throw new Error("Saved labels do not match the trained model");
-            }
-            const dummy = tf.zeros([1, SEQ_LENGTH, FEATURE_LEN]);
-            const warm = model.predict(dummy) as tf.Tensor;
-            await warm.data();
-            dummy.dispose();
-            warm.dispose();
-            if (cancelled) {
-              model.dispose();
-              return;
-            }
-            modelRef.current = model;
-            labelsRef.current = stored;
-            setDemoMode(false);
-            setModelSource("indexeddb");
-            setStatus("Trained model ready");
-            setIsReady(true);
-            return;
-          }
-        }
-      } catch {
-        /* fall through */
+      const classifier = loadCustomClassifier();
+      if (classifier) {
+        classifierRef.current = classifier;
+        labelsRef.current = classifier.labels;
+        setDemoMode(false);
+        setModelSource("indexeddb");
+        setStatus("Custom trained model ready");
+        setIsReady(true);
+        return;
       }
 
       try {
