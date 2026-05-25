@@ -292,12 +292,42 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         return;
       }
 
-      if (!modelRef.current) return;
       if (sequenceRef.current.length < SEQ_LENGTH) return;
 
       const now = performance.now();
       if (now - lastInferRef.current < 110) return;
       lastInferRef.current = now;
+
+      if (classifierRef.current) {
+        const guess = classifySequence(sequenceRef.current, classifierRef.current);
+        const item: Prediction = guess ?? { word: "", confidence: 0 };
+        const word = item.confidence >= Math.max(0.55, confidenceThreshold - 0.2) ? item.word : "";
+        predictionWindowRef.current.push({ word, confidence: item.confidence });
+        if (predictionWindowRef.current.length > STABLE_WINDOW) predictionWindowRef.current.shift();
+
+        const votes = new Map<string, { count: number; total: number }>();
+        for (const sample of predictionWindowRef.current) {
+          if (!sample.word) continue;
+          const existing = votes.get(sample.word) ?? { count: 0, total: 0 };
+          votes.set(sample.word, {
+            count: existing.count + 1,
+            total: existing.total + sample.confidence,
+          });
+        }
+
+        let stable: Prediction = { word: "", confidence: item.confidence };
+        votes.forEach((value, key) => {
+          if (value.count >= 3 && value.count > (votes.get(stable.word)?.count ?? 0)) {
+            stable = { word: key, confidence: value.total / value.count };
+          }
+        });
+
+        setPrediction(stable);
+        if (stable.word) onPrediction?.(stable);
+        return;
+      }
+
+      if (!modelRef.current) return;
 
       const input = tf.tensor3d([sequenceRef.current]);
       const pred = modelRef.current.predict(input) as tf.Tensor;
