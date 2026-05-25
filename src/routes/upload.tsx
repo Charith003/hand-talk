@@ -1,18 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import {
-  Brain,
-  CheckCircle2,
-  FileImage,
-  FileVideo,
-  Loader2,
-  Radio,
-  Trash2,
-  Upload as UploadIcon,
-} from "lucide-react";
+import { CheckCircle2, FileImage, FileVideo, Loader2, Trash2 } from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
 import {
   FEATURE_LEN,
   MIN_SAMPLES_PER_LABEL,
+  TRAINING_STEPS,
   loadLabels,
   saveLabels,
   loadSamples,
@@ -233,7 +226,7 @@ function UploadPage() {
     setTrainLog(null);
     setMessage("Training started...");
     try {
-      await trainModel(samples, labels, (epoch, logs) => setTrainLog({ epoch, ...logs }), 50);
+      await trainModel(samples, labels, (epoch, logs) => setTrainLog({ epoch, ...logs }), TRAINING_STEPS);
       setMessage("Model trained and saved. Open the live recognizer to test it.");
     } catch (err) {
       setMessage(`Training failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -249,41 +242,7 @@ function UploadPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <UploadIcon className="h-5 w-5" />
-            </span>
-            <span>
-              <span className="block text-base font-semibold">Dataset Upload</span>
-              <span className="block text-xs text-muted-foreground">
-                images · videos · auto-train
-              </span>
-            </span>
-          </Link>
-          <nav className="flex items-center gap-2 text-sm">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              <Radio className="h-4 w-4" /> Live
-            </Link>
-            <Link
-              to="/train"
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              <Brain className="h-4 w-4" /> Train
-            </Link>
-            <Link
-              to="/upload"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground transition hover:opacity-90"
-            >
-              <UploadIcon className="h-4 w-4" /> Upload dataset
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <AppHeader title="Dataset Upload" subtitle="images · videos · auto-train" />
 
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-10">
         <div className="mb-6">
@@ -420,7 +379,7 @@ function UploadPage() {
                 disabled={training}
                 className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
               >
-                {training ? `Training epoch ${trainLog?.epoch ?? 0}/50` : "Train model now"}
+                {training ? `Training step ${trainLog?.epoch ?? 0}/${TRAINING_STEPS}` : "Train model now"}
               </button>
               {!training && (
                 <p className="mt-2 text-xs text-muted-foreground">

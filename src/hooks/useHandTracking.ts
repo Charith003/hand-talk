@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as tf from "@tensorflow/tfjs";
 import {
-  MODEL_KEY,
+  classifySequence,
+  loadCustomClassifier,
   loadLabels,
   SEQ_LENGTH as S_LEN,
   FEATURE_LEN as F_LEN,
+  type TrainedGestureClassifier,
 } from "@/lib/gestureStore";
 import { recognizeHeuristic, HEURISTIC_VOCAB } from "@/lib/heuristicRecognizer";
 
@@ -82,6 +84,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const modelRef = useRef<tf.LayersModel | null>(null);
+  const classifierRef = useRef<TrainedGestureClassifier | null>(null);
   const labelsRef = useRef<string[]>([]);
   const sequenceRef = useRef<number[][]>([]);
   const cameraRef = useRef<CameraHandle | null>(null);
@@ -118,6 +121,16 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         /* noop */
       }
       modelRef.current = null;
+      classifierRef.current = null;
+
+      if (!enableInference) {
+        labelsRef.current = [];
+        setDemoMode(false);
+        setModelSource("demo");
+        setStatus("Hand tracker ready");
+        setIsReady(true);
+        return;
+      }
 
       if (mode === "heuristic") {
         labelsRef.current = [...HEURISTIC_VOCAB];
@@ -128,37 +141,15 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         return;
       }
 
-      try {
-        const list = await tf.io.listModels();
-        if (list[MODEL_KEY]) {
-          const stored = loadLabels();
-          if (stored.length > 0) {
-            setStatus("Loading your trained model...");
-            const model = await tf.loadLayersModel(MODEL_KEY);
-            if (getClassCount(model) !== stored.length) {
-              model.dispose();
-              throw new Error("Saved labels do not match the trained model");
-            }
-            const dummy = tf.zeros([1, SEQ_LENGTH, FEATURE_LEN]);
-            const warm = model.predict(dummy) as tf.Tensor;
-            await warm.data();
-            dummy.dispose();
-            warm.dispose();
-            if (cancelled) {
-              model.dispose();
-              return;
-            }
-            modelRef.current = model;
-            labelsRef.current = stored;
-            setDemoMode(false);
-            setModelSource("indexeddb");
-            setStatus("Trained model ready");
-            setIsReady(true);
-            return;
-          }
-        }
-      } catch {
-        /* fall through */
+      const classifier = loadCustomClassifier();
+      if (classifier) {
+        classifierRef.current = classifier;
+        labelsRef.current = classifier.labels;
+        setDemoMode(false);
+        setModelSource("indexeddb");
+        setStatus("Custom trained model ready");
+        setIsReady(true);
+        return;
       }
 
       try {
@@ -205,7 +196,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [modelVersion, mode]);
+  }, [modelVersion, mode, enableInference]);
 
   const startCamera = useCallback(() => {
     setCameraError("");
@@ -310,12 +301,42 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
         return;
       }
 
-      if (!modelRef.current) return;
       if (sequenceRef.current.length < SEQ_LENGTH) return;
 
       const now = performance.now();
       if (now - lastInferRef.current < 110) return;
       lastInferRef.current = now;
+
+      if (classifierRef.current) {
+        const guess = classifySequence(sequenceRef.current, classifierRef.current);
+        const item: Prediction = guess ?? { word: "", confidence: 0 };
+        const word = item.confidence >= Math.max(0.55, confidenceThreshold - 0.2) ? item.word : "";
+        predictionWindowRef.current.push({ word, confidence: item.confidence });
+        if (predictionWindowRef.current.length > STABLE_WINDOW) predictionWindowRef.current.shift();
+
+        const votes = new Map<string, { count: number; total: number }>();
+        for (const sample of predictionWindowRef.current) {
+          if (!sample.word) continue;
+          const existing = votes.get(sample.word) ?? { count: 0, total: 0 };
+          votes.set(sample.word, {
+            count: existing.count + 1,
+            total: existing.total + sample.confidence,
+          });
+        }
+
+        let stable: Prediction = { word: "", confidence: item.confidence };
+        votes.forEach((value, key) => {
+          if (value.count >= 3 && value.count > (votes.get(stable.word)?.count ?? 0)) {
+            stable = { word: key, confidence: value.total / value.count };
+          }
+        });
+
+        setPrediction(stable);
+        if (stable.word) onPrediction?.(stable);
+        return;
+      }
+
+      if (!modelRef.current) return;
 
       const input = tf.tensor3d([sequenceRef.current]);
       const pred = modelRef.current.predict(input) as tf.Tensor;

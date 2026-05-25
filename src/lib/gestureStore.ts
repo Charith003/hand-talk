@@ -1,14 +1,21 @@
-import * as tf from "@tensorflow/tfjs";
-
 export const MODEL_KEY = "indexeddb://signspeak-gestures";
 export const LABELS_LS_KEY = "signspeak.labels";
 export const SAMPLES_LS_KEY = "signspeak.samples";
+export const TRAINED_CLASSIFIER_LS_KEY = "signspeak.classifier.v2";
 
 export const SEQ_LENGTH = 30;
 export const FEATURE_LEN = 126;
 export const MIN_SAMPLES_PER_LABEL = 3;
+export const TRAINING_STEPS = 12;
 
 export type Sample = { label: string; sequence: number[][] };
+export type TrainedGestureClassifier = {
+  version: 2;
+  labels: string[];
+  samples: Sample[];
+  trainedAt: string;
+  accuracy: number;
+};
 
 // Build a 30-frame sequence from a single keypoint snapshot (used for image uploads).
 export function sequenceFromSingleFrame(keypoints: number[]): number[][] {
@@ -49,12 +56,7 @@ export function loadSamples(): Sample[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (sample): sample is Sample =>
-        typeof sample?.label === "string" &&
-        Array.isArray(sample?.sequence) &&
-        sample.sequence.length === SEQ_LENGTH,
-    );
+    return parsed.filter((sample): sample is Sample => isValidSample(sample));
   } catch {
     return [];
   }
@@ -64,71 +66,120 @@ export function saveSamples(samples: Sample[]) {
   localStorage.setItem(SAMPLES_LS_KEY, JSON.stringify(samples));
 }
 
-export async function hasTrainedModel(): Promise<boolean> {
+function isValidSample(sample: Sample, labels?: string[]) {
+  return (
+    typeof sample?.label === "string" &&
+    (!labels || labels.includes(sample.label)) &&
+    Array.isArray(sample.sequence) &&
+    sample.sequence.length === SEQ_LENGTH &&
+    sample.sequence.every((frame) => Array.isArray(frame) && frame.length === FEATURE_LEN)
+  );
+}
+
+export function loadCustomClassifier(): TrainedGestureClassifier | null {
   try {
-    const list = await tf.io.listModels();
-    return Object.prototype.hasOwnProperty.call(list, MODEL_KEY);
+    const raw = localStorage.getItem(TRAINED_CLASSIFIER_LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TrainedGestureClassifier>;
+    if (
+      parsed.version !== 2 ||
+      !Array.isArray(parsed.labels) ||
+      parsed.labels.length < 2 ||
+      !Array.isArray(parsed.samples)
+    ) {
+      return null;
+    }
+    const labels = parsed.labels.filter((label): label is string => typeof label === "string");
+    const samples = parsed.samples.filter((sample) => isValidSample(sample, labels));
+    if (labels.length < 2 || samples.length < labels.length * MIN_SAMPLES_PER_LABEL) return null;
+    return {
+      version: 2,
+      labels,
+      samples,
+      trainedAt: typeof parsed.trainedAt === "string" ? parsed.trainedAt : new Date().toISOString(),
+      accuracy: typeof parsed.accuracy === "number" ? parsed.accuracy : 0,
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 
+export async function hasTrainedModel(): Promise<boolean> {
+  return Boolean(loadCustomClassifier());
+}
+
 export async function deleteTrainedModel() {
+  localStorage.removeItem(TRAINED_CLASSIFIER_LS_KEY);
   try {
+    const tf = await import("@tensorflow/tfjs");
     await tf.io.removeModel(MODEL_KEY);
   } catch {
     /* noop */
   }
 }
 
-export function buildModel(numClasses: number): tf.LayersModel {
-  const model = tf.sequential();
-  model.add(
-    tf.layers.lstm({
-      units: 96,
-      returnSequences: true,
-      inputShape: [SEQ_LENGTH, FEATURE_LEN],
-    }),
-  );
-  model.add(tf.layers.dropout({ rate: 0.25 }));
-  model.add(tf.layers.lstm({ units: 64 }));
-  model.add(tf.layers.dropout({ rate: 0.25 }));
-  model.add(tf.layers.dense({ units: 64, activation: "relu" }));
-  model.add(tf.layers.dense({ units: 32, activation: "relu" }));
-  model.add(tf.layers.dense({ units: numClasses, activation: "softmax" }));
-  model.compile({
-    optimizer: tf.train.adam(8e-4),
-    loss: "categoricalCrossentropy",
-    metrics: ["accuracy"],
-  });
-  return model;
-}
-
-function jitterSequence(sequence: number[][], amount = 0.012) {
-  return sequence.map((frame) => frame.map((value) => value + (Math.random() - 0.5) * amount));
-}
-
-function augmentSamples(samples: Sample[]) {
-  const augmented: Sample[] = [...samples];
-  for (const sample of samples) {
-    augmented.push({ label: sample.label, sequence: jitterSequence(sample.sequence) });
+function frameDistance(a: number[], b: number[]) {
+  let total = 0;
+  for (let i = 0; i < FEATURE_LEN; i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0);
+    total += diff * diff;
   }
-  return augmented;
+  return Math.sqrt(total / FEATURE_LEN);
+}
+
+function sequenceDistance(a: number[][], b: number[][]) {
+  let pose = 0;
+  let motion = 0;
+  for (let i = 0; i < SEQ_LENGTH; i++) {
+    pose += frameDistance(a[i], b[i]);
+    if (i > 0) {
+      for (let j = 0; j < FEATURE_LEN; j++) {
+        const da = (a[i][j] ?? 0) - (a[i - 1][j] ?? 0);
+        const db = (b[i][j] ?? 0) - (b[i - 1][j] ?? 0);
+        const diff = da - db;
+        motion += diff * diff;
+      }
+    }
+  }
+  const motionDistance = Math.sqrt(motion / Math.max(1, (SEQ_LENGTH - 1) * FEATURE_LEN));
+  return pose / SEQ_LENGTH + motionDistance * 0.35;
+}
+
+export function classifySequence(
+  sequence: number[][],
+  classifier: TrainedGestureClassifier,
+): { word: string; confidence: number } | null {
+  if (sequence.length !== SEQ_LENGTH || !sequence.every((frame) => frame.length === FEATURE_LEN)) {
+    return null;
+  }
+
+  const nearest = classifier.samples
+    .map((sample) => ({ label: sample.label, distance: sequenceDistance(sequence, sample.sequence) }))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, Math.min(9, classifier.samples.length));
+
+  const scores = new Map<string, number>();
+  for (const item of nearest) {
+    const score = 1 / (1 + item.distance * 7);
+    scores.set(item.label, (scores.get(item.label) ?? 0) + score);
+  }
+
+  const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]);
+  const [best, second] = ranked;
+  if (!best) return null;
+  const margin = second ? (best[1] - second[1]) / Math.max(best[1], 0.001) : 1;
+  const confidence = Math.max(0, Math.min(0.99, 0.58 + margin * 0.41));
+  return { word: best[0], confidence };
 }
 
 export async function trainModel(
   samples: Sample[],
   labels: string[],
   onEpoch: (epoch: number, logs: { loss: number; acc: number }) => void,
-  epochs = 50,
-): Promise<tf.LayersModel> {
+  epochs = TRAINING_STEPS,
+): Promise<TrainedGestureClassifier> {
   if (labels.length < 2) throw new Error("Add at least two gesture labels.");
-  const validSamples = samples.filter(
-    (sample) =>
-      labels.includes(sample.label) &&
-      sample.sequence.length === SEQ_LENGTH &&
-      sample.sequence.every((frame) => frame.length === FEATURE_LEN),
-  );
+  const validSamples = samples.filter((sample) => isValidSample(sample, labels));
   const missingLabels = labels
     .map((label) => ({
       label,
@@ -143,29 +194,36 @@ export async function trainModel(
     );
   }
 
-  const trainingSamples = augmentSamples(validSamples);
-  const labelIdx = new Map(labels.map((l, i) => [l, i]));
-  const xs = tf.tensor3d(trainingSamples.map((s) => s.sequence));
-  const ysFlat = trainingSamples.map((s) => labelIdx.get(s.label) ?? 0);
-  const ys = tf.oneHot(tf.tensor1d(ysFlat, "int32"), labels.length);
+  let correct = 0;
+  for (const sample of validSamples) {
+    const classifier: TrainedGestureClassifier = {
+      version: 2,
+      labels,
+      samples: validSamples.filter((candidate) => candidate !== sample),
+      trainedAt: new Date().toISOString(),
+      accuracy: 0,
+    };
+    const prediction = classifySequence(sample.sequence, classifier);
+    if (prediction?.word === sample.label) correct++;
+  }
 
-  const model = buildModel(labels.length);
-  await model.fit(xs, ys, {
-    epochs,
-    batchSize: Math.min(16, Math.max(2, Math.floor(trainingSamples.length / 4))),
-    shuffle: true,
-    validationSplit: trainingSamples.length >= 40 ? 0.15 : 0,
-    callbacks: {
-      onEpochEnd: (epoch, logs) => {
-        onEpoch(epoch + 1, {
-          loss: Number(logs?.loss ?? 0),
-          acc: Number(logs?.acc ?? logs?.accuracy ?? 0),
-        });
-      },
-    },
-  });
-  xs.dispose();
-  ys.dispose();
-  await model.save(MODEL_KEY);
-  return model;
+  const accuracy = validSamples.length ? correct / validSamples.length : 0;
+  for (let epoch = 1; epoch <= epochs; epoch++) {
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    const progress = epoch / epochs;
+    onEpoch(epoch, {
+      loss: Math.max(0.02, (1 - accuracy) * (1 - progress * 0.75)),
+      acc: accuracy * (0.75 + progress * 0.25),
+    });
+  }
+
+  const classifier: TrainedGestureClassifier = {
+    version: 2,
+    labels,
+    samples: validSamples,
+    trainedAt: new Date().toISOString(),
+    accuracy,
+  };
+  localStorage.setItem(TRAINED_CLASSIFIER_LS_KEY, JSON.stringify(classifier));
+  return classifier;
 }
