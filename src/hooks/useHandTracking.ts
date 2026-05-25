@@ -123,6 +123,15 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
       modelRef.current = null;
       classifierRef.current = null;
 
+      if (!enableInference) {
+        labelsRef.current = [];
+        setDemoMode(false);
+        setModelSource("demo");
+        setStatus("Hand tracker ready");
+        setIsReady(true);
+        return;
+      }
+
       if (mode === "heuristic") {
         labelsRef.current = [...HEURISTIC_VOCAB];
         setDemoMode(false);
@@ -187,7 +196,7 @@ export function useHandTracking(options: HandTrackingOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [modelVersion, mode]);
+  }, [modelVersion, mode, enableInference]);
 
   const startCamera = useCallback(() => {
     setCameraError("");
