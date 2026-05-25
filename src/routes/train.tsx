@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Play, Plus, Trash2, Video, Upload, Radio, Brain } from "lucide-react";
+import { CheckCircle2, Play, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppHeader } from "@/components/AppHeader";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import {
   MIN_SAMPLES_PER_LABEL,
   SEQ_LENGTH,
+  TRAINING_STEPS,
   loadLabels,
   saveLabels,
   loadSamples,
@@ -159,7 +161,7 @@ function TrainPage() {
           setTrainLog({ epoch, loss: logs.loss, acc: logs.acc });
           setTrainHistory((prev) => [...prev, { epoch, ...logs }]);
         },
-        50,
+        TRAINING_STEPS,
       );
       setMessage("Model trained and saved. Open the live recognizer to test it.");
       setModelVersion((v) => v + 1);
@@ -187,45 +189,7 @@ function TrainPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
-          <Link to="/" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Video className="h-5 w-5" />
-            </span>
-            <span>
-              <span className="block text-base font-semibold">Gesture Trainer</span>
-              <span className="block text-xs text-muted-foreground">local browser training</span>
-            </span>
-          </Link>
-          <nav className="flex items-center gap-2 text-sm">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              <Radio className="h-4 w-4" /> Live
-            </Link>
-            <Link
-              to="/train"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground transition hover:opacity-90"
-            >
-              <Brain className="h-4 w-4" /> Train
-            </Link>
-            <Link
-              to="/upload"
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              <Upload className="h-4 w-4" /> Upload dataset
-            </Link>
-            <Link
-              to="/about"
-              className="rounded-lg px-3 py-2 text-muted-foreground transition hover:bg-accent hover:text-accent-foreground"
-            >
-              About
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <AppHeader title="Gesture Trainer" subtitle="local browser training" />
 
       <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:py-10">
         <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
@@ -340,7 +304,7 @@ function TrainPage() {
                 className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
               >
                 {training
-                  ? `Training epoch ${trainLog?.epoch ?? 0}/50`
+                  ? `Training step ${trainLog?.epoch ?? 0}/${TRAINING_STEPS}`
                   : canTrain
                     ? "Train model now"
                     : "Train model"}
