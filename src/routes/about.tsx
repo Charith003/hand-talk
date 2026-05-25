@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { AppHeader } from "@/components/AppHeader";
 
 export const Route = createFileRoute("/about")({
   component: About,
@@ -16,13 +17,13 @@ export const Route = createFileRoute("/about")({
 
 function About() {
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
-        ← Back
-      </Link>
-      <h1 className="mt-4 text-3xl font-semibold tracking-tight">
-        How SignSpeak works
-      </h1>
+    <main className="min-h-screen bg-background text-foreground">
+      <AppHeader title="About SignSpeak" subtitle="architecture · privacy · training" />
+      <section className="mx-auto max-w-3xl px-6 py-12">
+        <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+          ← Back to live recognition
+        </Link>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight">How SignSpeak works</h1>
 
       <h2 className="mt-8 text-lg font-semibold">Stages</h2>
       <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
@@ -61,6 +62,7 @@ function About() {
         Everything runs in the browser. No video, no keypoints, and no
         predictions ever leave your device.
       </p>
+      </section>
     </main>
   );
 }
