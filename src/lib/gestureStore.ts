@@ -6,6 +6,7 @@ export const SAMPLES_LS_KEY = "signspeak.samples";
 
 export const SEQ_LENGTH = 30;
 export const FEATURE_LEN = 126;
+export const MIN_SAMPLES_PER_LABEL = 3;
 
 export type Sample = { label: string; sequence: number[][] };
 
@@ -123,10 +124,23 @@ export async function trainModel(
 ): Promise<tf.LayersModel> {
   if (labels.length < 2) throw new Error("Add at least two gesture labels.");
   const validSamples = samples.filter(
-    (sample) => labels.includes(sample.label) && sample.sequence.length === SEQ_LENGTH,
+    (sample) =>
+      labels.includes(sample.label) &&
+      sample.sequence.length === SEQ_LENGTH &&
+      sample.sequence.every((frame) => frame.length === FEATURE_LEN),
   );
-  if (validSamples.length < labels.length * 5) {
-    throw new Error("Record at least 5 good samples for every gesture.");
+  const missingLabels = labels
+    .map((label) => ({
+      label,
+      count: validSamples.filter((sample) => sample.label === label).length,
+    }))
+    .filter(({ count }) => count < MIN_SAMPLES_PER_LABEL);
+  if (missingLabels.length > 0) {
+    throw new Error(
+      `Need ${MIN_SAMPLES_PER_LABEL}+ good samples for every gesture. Missing: ${missingLabels
+        .map(({ label, count }) => `${label} (${count}/${MIN_SAMPLES_PER_LABEL})`)
+        .join(", ")}.`,
+    );
   }
 
   const trainingSamples = augmentSamples(validSamples);

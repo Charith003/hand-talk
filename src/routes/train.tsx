@@ -3,6 +3,7 @@ import { CheckCircle2, Play, Plus, Trash2, Video, Upload, Radio, Brain } from "l
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import {
+  MIN_SAMPLES_PER_LABEL,
   SEQ_LENGTH,
   loadLabels,
   saveLabels,
@@ -132,11 +133,20 @@ function TrainPage() {
   const minPerLabel = countsByLabel.length
     ? Math.min(...countsByLabel.map((item) => item.count))
     : 0;
-  const MIN_PER_LABEL = 3;
+  const MIN_PER_LABEL = MIN_SAMPLES_PER_LABEL;
   const canTrain = labels.length >= 2 && minPerLabel >= MIN_PER_LABEL && !training;
+  const trainRequirementText =
+    labels.length < 2
+      ? "Add at least 2 gesture labels."
+      : minPerLabel < MIN_PER_LABEL
+        ? `Record ${MIN_PER_LABEL}+ samples for each label. Lowest currently: ${minPerLabel}.`
+        : "Ready to train.";
 
   const handleTrain = async () => {
-    if (!canTrain) return;
+    if (!canTrain) {
+      setMessage(trainRequirementText);
+      return;
+    }
     setTraining(true);
     setTrainLog(null);
     setTrainHistory([]);
@@ -326,7 +336,7 @@ function TrainPage() {
               <button
                 type="button"
                 onClick={handleTrain}
-                disabled={!canTrain}
+                disabled={training}
                 className="mt-3 w-full rounded-xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
               >
                 {training
@@ -335,16 +345,20 @@ function TrainPage() {
                     ? "Train model now"
                     : "Train model"}
               </button>
-              {!canTrain && !training && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Need 2+ labels and {MIN_PER_LABEL}+ samples each. Lowest currently: {minPerLabel}.
-                </p>
+              {!training && (
+                <p className="mt-2 text-xs text-muted-foreground">{trainRequirementText}</p>
               )}
               {trainLog && (
                 <div className="mt-3 rounded-xl bg-secondary p-3 text-xs text-secondary-foreground">
-                  <p>Epoch <span className="font-mono">{trainLog.epoch}</span></p>
-                  <p>Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span></p>
-                  <p>Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span></p>
+                  <p>
+                    Epoch <span className="font-mono">{trainLog.epoch}</span>
+                  </p>
+                  <p>
+                    Loss: <span className="font-mono">{trainLog.loss.toFixed(4)}</span>
+                  </p>
+                  <p>
+                    Accuracy: <span className="font-mono">{(trainLog.acc * 100).toFixed(1)}%</span>
+                  </p>
                 </div>
               )}
               {message && (
@@ -399,7 +413,7 @@ function TrainPage() {
                     >
                       <span className="block truncate font-medium">{label}</span>
                       <span className="text-xs text-muted-foreground">
-                        {count} / 5 minimum samples
+                        {count} / {MIN_PER_LABEL} minimum samples
                       </span>
                     </button>
                     <button
