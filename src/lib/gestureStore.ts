@@ -1,14 +1,21 @@
-import * as tf from "@tensorflow/tfjs";
-
 export const MODEL_KEY = "indexeddb://signspeak-gestures";
 export const LABELS_LS_KEY = "signspeak.labels";
 export const SAMPLES_LS_KEY = "signspeak.samples";
+export const TRAINED_CLASSIFIER_LS_KEY = "signspeak.classifier.v2";
 
 export const SEQ_LENGTH = 30;
 export const FEATURE_LEN = 126;
 export const MIN_SAMPLES_PER_LABEL = 3;
+export const TRAINING_STEPS = 12;
 
 export type Sample = { label: string; sequence: number[][] };
+export type TrainedGestureClassifier = {
+  version: 2;
+  labels: string[];
+  samples: Sample[];
+  trainedAt: string;
+  accuracy: number;
+};
 
 // Build a 30-frame sequence from a single keypoint snapshot (used for image uploads).
 export function sequenceFromSingleFrame(keypoints: number[]): number[][] {
@@ -64,17 +71,52 @@ export function saveSamples(samples: Sample[]) {
   localStorage.setItem(SAMPLES_LS_KEY, JSON.stringify(samples));
 }
 
-export async function hasTrainedModel(): Promise<boolean> {
+function isValidSample(sample: Sample, labels?: string[]) {
+  return (
+    typeof sample?.label === "string" &&
+    (!labels || labels.includes(sample.label)) &&
+    Array.isArray(sample.sequence) &&
+    sample.sequence.length === SEQ_LENGTH &&
+    sample.sequence.every((frame) => Array.isArray(frame) && frame.length === FEATURE_LEN)
+  );
+}
+
+export function loadCustomClassifier(): TrainedGestureClassifier | null {
   try {
-    const list = await tf.io.listModels();
-    return Object.prototype.hasOwnProperty.call(list, MODEL_KEY);
+    const raw = localStorage.getItem(TRAINED_CLASSIFIER_LS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TrainedGestureClassifier>;
+    if (
+      parsed.version !== 2 ||
+      !Array.isArray(parsed.labels) ||
+      parsed.labels.length < 2 ||
+      !Array.isArray(parsed.samples)
+    ) {
+      return null;
+    }
+    const labels = parsed.labels.filter((label): label is string => typeof label === "string");
+    const samples = parsed.samples.filter((sample) => isValidSample(sample, labels));
+    if (labels.length < 2 || samples.length < labels.length * MIN_SAMPLES_PER_LABEL) return null;
+    return {
+      version: 2,
+      labels,
+      samples,
+      trainedAt: typeof parsed.trainedAt === "string" ? parsed.trainedAt : new Date().toISOString(),
+      accuracy: typeof parsed.accuracy === "number" ? parsed.accuracy : 0,
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 
+export async function hasTrainedModel(): Promise<boolean> {
+  return Boolean(loadCustomClassifier());
+}
+
 export async function deleteTrainedModel() {
+  localStorage.removeItem(TRAINED_CLASSIFIER_LS_KEY);
   try {
+    const tf = await import("@tensorflow/tfjs");
     await tf.io.removeModel(MODEL_KEY);
   } catch {
     /* noop */
