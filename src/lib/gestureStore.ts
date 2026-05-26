@@ -127,22 +127,42 @@ function frameDistance(a: number[], b: number[]) {
   return Math.sqrt(total / FEATURE_LEN);
 }
 
-function sequenceDistance(a: number[][], b: number[][]) {
-  let pose = 0;
-  let motion = 0;
-  for (let i = 0; i < SEQ_LENGTH; i++) {
-    pose += frameDistance(a[i], b[i]);
-    if (i > 0) {
-      for (let j = 0; j < FEATURE_LEN; j++) {
-        const da = (a[i][j] ?? 0) - (a[i - 1][j] ?? 0);
-        const db = (b[i][j] ?? 0) - (b[i - 1][j] ?? 0);
-        const diff = da - db;
-        motion += diff * diff;
-      }
+// Dynamic Time Warping along time axis with a Sakoe-Chiba band so small
+// timing differences between gestures don't blow up the distance.
+function dtwDistance(a: number[][], b: number[][], band = 4) {
+  const n = a.length;
+  const m = b.length;
+  const INF = Number.POSITIVE_INFINITY;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(INF));
+  dp[0][0] = 0;
+  for (let i = 1; i <= n; i++) {
+    const jStart = Math.max(1, i - band);
+    const jEnd = Math.min(m, i + band);
+    for (let j = jStart; j <= jEnd; j++) {
+      const cost = frameDistance(a[i - 1], b[j - 1]);
+      dp[i][j] = cost + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
     }
   }
-  const motionDistance = Math.sqrt(motion / Math.max(1, (SEQ_LENGTH - 1) * FEATURE_LEN));
-  return pose / SEQ_LENGTH + motionDistance * 0.35;
+  return dp[n][m] / (n + m);
+}
+
+function motionDistance(a: number[][], b: number[][]) {
+  let motion = 0;
+  let count = 0;
+  for (let i = 1; i < SEQ_LENGTH; i++) {
+    for (let j = 0; j < FEATURE_LEN; j++) {
+      const da = (a[i][j] ?? 0) - (a[i - 1][j] ?? 0);
+      const db = (b[i][j] ?? 0) - (b[i - 1][j] ?? 0);
+      const diff = da - db;
+      motion += diff * diff;
+      count++;
+    }
+  }
+  return Math.sqrt(motion / Math.max(1, count));
+}
+
+function sequenceDistance(a: number[][], b: number[][]) {
+  return dtwDistance(a, b, 4) + motionDistance(a, b) * 0.4;
 }
 
 export function classifySequence(
@@ -153,23 +173,41 @@ export function classifySequence(
     return null;
   }
 
-  const nearest = classifier.samples
-    .map((sample) => ({ label: sample.label, distance: sequenceDistance(sequence, sample.sequence) }))
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, Math.min(9, classifier.samples.length));
+  // Score every training sample, then aggregate per label using the
+  // best-of-each-label distance (more robust with tiny datasets than k-NN).
+  const distances = classifier.samples.map((sample) => ({
+    label: sample.label,
+    distance: sequenceDistance(sequence, sample.sequence),
+  }));
 
-  const scores = new Map<string, number>();
-  for (const item of nearest) {
-    const score = 1 / (1 + item.distance * 7);
-    scores.set(item.label, (scores.get(item.label) ?? 0) + score);
+  const bestByLabel = new Map<string, number>();
+  for (const item of distances) {
+    const prev = bestByLabel.get(item.label);
+    if (prev === undefined || item.distance < prev) bestByLabel.set(item.label, item.distance);
   }
 
-  const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]);
-  const [best, second] = ranked;
+  // Also include a k-NN soft vote so consistent labels get extra weight.
+  const k = Math.min(5, distances.length);
+  const knn = [...distances].sort((a, b) => a.distance - b.distance).slice(0, k);
+  const voteScore = new Map<string, number>();
+  for (const item of knn) {
+    const w = 1 / (1 + item.distance * 6);
+    voteScore.set(item.label, (voteScore.get(item.label) ?? 0) + w);
+  }
+
+  const combined = [...bestByLabel.entries()].map(([label, dist]) => {
+    const proximity = 1 / (1 + dist * 6);
+    const vote = voteScore.get(label) ?? 0;
+    return { label, score: proximity * 0.65 + vote * 0.35, dist };
+  });
+  combined.sort((a, b) => b.score - a.score);
+
+  const [best, second] = combined;
   if (!best) return null;
-  const margin = second ? (best[1] - second[1]) / Math.max(best[1], 0.001) : 1;
-  const confidence = Math.max(0, Math.min(0.99, 0.58 + margin * 0.41));
-  return { word: best[0], confidence };
+  const margin = second ? (best.score - second.score) / Math.max(best.score, 0.001) : 1;
+  const proximityConf = 1 / (1 + best.dist * 5);
+  const confidence = Math.max(0, Math.min(0.99, proximityConf * 0.6 + margin * 0.4));
+  return { word: best.label, confidence };
 }
 
 export async function trainModel(
